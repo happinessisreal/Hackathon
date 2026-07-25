@@ -81,7 +81,7 @@ export function renderZoneGrid(container, zones, { role, onAck, onOpenTimeline }
     score.textContent = zone.offline ? "--" : Math.round(zone.risk_score);
     card.appendChild(score);
 
-    if (zone.trend && zone.trend.scores && zone.trend.scores.length >= 2) {
+    if (!zone.offline && zone.trend && zone.trend.scores && zone.trend.scores.length >= 2) {
       const trendRow = document.createElement("div");
       trendRow.className = "trend-row";
       trendRow.appendChild(buildSparkline(zone.trend.scores));
