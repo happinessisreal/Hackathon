@@ -12,8 +12,11 @@ concurrent races) - not as a substitute for the Wokwi hardware demo.
 - **Phase 1** (ingestion, fusion, state machine, incidents, ack, auth/RBAC, tests): done.
 - **Phase 2** (WS broadcast + full dashboard): done.
 - **Phase 3** (sim/ zone simulators + driver scenarios + resilience): done.
-- **Phase 4** (firmware), **Phase 5** (bonuses 2-4), **Phase 6**
-  (docs/video/submission): not yet started.
+- **Phase 4** (firmware): written, cross-checked against the backend
+  contract, **not yet Wokwi-smoke-tested by a human** - see
+  `firmware/README.md`.
+- **Phase 5** (bonuses 2-4), **Phase 6** (docs/video/submission): not yet
+  started.
 
 See `ASSUMPTIONS.md` for defaults chosen without pausing for confirmation.
 
@@ -82,6 +85,21 @@ a demo** - `tc22`/`tc23`/etc. flip real zone states, and `--phantom` creates
 and later deletes zone rows. Run it against a disposable DB/port
 (`DATABASE_URL=... uvicorn ... --port 8801`, `sim/driver.py --base-url
 http://127.0.0.1:8801`) unless you're deliberately recording it live.
+
+## Firmware (Wokwi Track B)
+
+`firmware/zone_node.ino` - one ESP32 sketch, all 3 zones (per-zone config
+block at the top). `firmware/diagram.json` wires up IoT Lab (all 4 sensor
+types); Server Room / Data Science Lab use the same sketch and diagram
+minus the gas sensor. See `firmware/README.md` for per-zone config, the
+Wokwi part substitutions (no native flame/water-level parts - pushbutton
+and potentiometer stand in, clearly labeled), the pin map, and - important
+before recording anything - how to reach a locally-running backend from
+Wokwi's simulated network (it can't reach `localhost`; needs a tunnel).
+
+**Not yet validated in the actual Wokwi simulator or on real hardware** -
+written and cross-checked against the backend contract and Wokwi's part
+docs, but needs a human smoke-test before it's demo-ready.
 
 ## API
 

@@ -1,0 +1,4 @@
+# Wokwi auto-installs these from the Arduino Library Manager on simulation
+# start. Pinned to known-stable versions rather than "latest" so a re-run
+# months from now behaves the same way.
+ArduinoJson@6.21.5
