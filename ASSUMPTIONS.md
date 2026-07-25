@@ -1,0 +1,41 @@
+# ASSUMPTIONS.md
+
+Defaults chosen without pausing for confirmation (per CLAUDE.md kickoff rule), logged here so they're auditable.
+
+## Phase 0
+
+- **Team name**: `[TEAM_NAME]` placeholder left in place; must be replaced everywhere before submission (tracked in SUBMISSION.md, added in Phase 6).
+- **Auth token model**: `users.token` (schema-locked single column) is a random opaque bearer token issued on login (`secrets.token_urlsafe(32)`), not a JWT. Simple, matches the schema exactly, avoids a signing-key dependency. One active session per user - logging in again issues a new token and invalidates the old one implicitly (column overwritten). Acceptable for a hackathon demo; noted as a scaling gap in DOCUMENTATION.md.
+- **Password hashing**: PBKDF2-HMAC-SHA256 via stdlib `hashlib` (`"<salt_hex>$<hash_hex>"`), not bcrypt/argon2, to avoid a compiled-extension dependency that can fail to build on a judge's machine. 260k iterations.
+- **Zone node auth**: `zones.api_key` (schema-locked), sent as `X-Zone-Key` header, checked against a DB lookup per request.
+
+## Phase 1 - data model additions beyond the literal locked schema block
+
+The CLAUDE.md schema block is the source of truth for structure; two nullable columns were added because specific locked *rules* require data the literal column list didn't include a place for. Both are additive/non-breaking:
+
+- `readings.anomaly BOOLEAN DEFAULT 0` - required by the out-of-order rule: "a reading with `ts_device` earlier than the zone's last applied reading is stored + flagged anomaly, never rewrites current state" (TC18c). There's nowhere else to put this flag without a schema addition.
+- `zone_transitions.reason TEXT NULL` - required by the override endpoint contract: "manual state set **with reason**". `cause` distinguishes sensor/manual; `reason` carries the admin's free-text justification for that specific manual transition.
+
+## Phase 1 - sensor payload semantics
+
+- **Rule 1 ("zone nodes send raw numbers, never a state or score") is interpreted as**: nodes may report a *normalized* physical reading (0.0-1.0 for gas/water, computed from ADC + the MQ-2 datasheet range in firmware) - this is a raw sensor value, unit-converted like a thermistor-to-Celsius conversion, not a derived state or score. Nodes never compute SAFE/WARNING/CRITICAL or a risk_score; only the backend fusion formula does. This reading matches the DB column names (`gas_norm`, `water_norm`) and the validation examples given verbatim in CLAUDE.md ("negative water / gas > 1.0" - i.e. the *normalized* field is what's range-checked).
+- **Per-sensor offline**: a payload field that is `null`/omitted means that specific sensor is offline for this reading. Pydantic fields are `Optional`; only out-of-range *non-null* values are rejected with 422. The zone card shows an OFFLINE badge if any hazard sensor is offline; the fusion formula treats a missing reading as a 0 contribution (never fabricates SAFE by treating "no data" as "safe").
+- **Gas warm-up boot time**: the ingest payload includes an optional `uptime_ms` field (milliseconds since the node's `millis()` reset), which is realistic ESP32 firmware behavior. `boot_ts = ts_server - uptime_ms/1000` on the first reading seen for a zone (in this process's lifetime). This survives brief network disconnects (uptime keeps counting) but correctly restarts the 30s warm-up window after an actual power-cycle. If `uptime_ms` is omitted, warm-up starts counting from the first reading received (fail-safe default: assume freshly booted).
+- **On backend restart**: boot time cannot be recovered from the DB (uptime isn't persisted per reading), so a restart conservatively re-arms the full 30s gas warm-up window rather than risk trusting a stale/incorrect boot estimate. This is a deliberate fail-safe bias, not an oversight.
+
+## Phase 1 - state machine mechanics (not pinned to exact numbers by CLAUDE.md, only behavior)
+
+- **Fire debounce**: exactly 5 consecutive HIGH raw readings (as CLAUDE.md states literally) trigger a jump to full contribution (level 1.0), not a gradual ramp - CLAUDE.md only specifies decay-on-removal as gradual, not rise. At 750ms/reading this is ~3.75s, not the case doc's paraphrased "0.75-1s"; the literal "5 consecutive readings" rule was treated as authoritative since it's precisely testable, and the timing prose reads as an approximation.
+- **Fire decay**: on raw HIGH->LOW after being debounced-on, contribution decays linearly from its current level to 0 over 5s (wall-clock based, recomputed on read, not a discrete step function). Re-triggering (5 more consecutive HIGHs) during decay snaps back to 1.0 and cancels the decay.
+- **Occupancy (PIR) hold**: applied symmetrically to both the *risk-formula input* and to "loggable" state - a raw PIR flip only becomes the stable `occupancy_factor` after holding continuously for 1.5s, whether entering or leaving occupied. This was extended from "logged only if held ≥1.5s" to also gate the fusion input, so a flickering PIR can't cause the risk score (and therefore transitions/incidents) to jitter either.
+- **Admin override semantics**: sets the zone to the exact requested state (SAFE/WARNING/CRITICAL) immediately, bypassing hysteresis for that one transition, and follows normal incident open/resolve rules. It is a point-in-time correction, not a lockout - the very next sensor reading re-evaluates normally via the real formula and hysteresis. This matches "manual state set" as a discrete action rather than a persistent mode, and avoids a manual override permanently masking a real, currently-reported hazard.
+- **Concurrency**: sensor ingestion and admin override for the same zone serialize on an in-process `asyncio.Lock` keyed by zone_id, so a same-instant race can't double-fire a transition/incident/actuation for one state entry. Documented as a single-process assumption; the scaling section notes the Postgres/Redis path needed for multi-worker deployment (TC11 doc requirement).
+
+## Phase 1 - priority queue delivery
+
+CLAUDE.md's locked API table has no dedicated `/api/priority` endpoint, but the frontend spec requires the ranked queue to survive a WS-drop-and-refetch with no stale data. Resolved by embedding `priority_queue` directly in the `GET /api/zones/status` response body (the documented reconnect-catch-up source), in addition to a `priority_update` WS event pushed on every change (Phase 2). No new REST route was invented.
+
+## Phase 1 - test harness
+
+- `sqlite+aiosqlite` with `NullPool` (no connection pooling) so tests and the async engine never share a live connection object across different asyncio event loops (pytest-asyncio's loop vs. FastAPI `TestClient`'s own loop) - a real bug source that's easy to hit with aiosqlite otherwise. Each connection checkout opens fresh.
+- Ack-race test (TC7b) calls the extracted `backend/ack_service.py` coroutine directly via `asyncio.gather` with two independent DB sessions, rather than trying to force a true network race through `TestClient` (which is single-threaded per portal). The DB-level unique-constraint race is what's actually being verified.
