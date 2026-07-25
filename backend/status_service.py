@@ -14,6 +14,7 @@ from backend.models import Incident, Sensor, Zone
 from backend.pipeline import SENSOR_FIELD_MAP
 from backend.pipeline import manager as zone_manager
 from backend.priority import compute_priority_queue
+from backend.trend import compute_trend
 
 
 async def build_zone_status_payload(db: AsyncSession, now: dt.datetime | None = None) -> dict:
@@ -49,6 +50,10 @@ async def build_zone_status_payload(db: AsyncSession, now: dt.datetime | None = 
                 "last_reading_at": runtime.last_ts_server.isoformat() if runtime.last_ts_server else None,
                 "open_incident_id": runtime.open_incident_id,
                 "incident_status": incident_status,
+                # Bonus 2: embedded in the same canonical snapshot (not a
+                # separate poll) so it stays consistent with CLAUDE.md rule 2
+                # - the WS push and the grid never disagree on what's rising.
+                "trend": compute_trend(runtime.recent_scores, runtime.current_state),
             }
         )
 

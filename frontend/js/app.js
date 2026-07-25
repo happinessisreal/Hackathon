@@ -37,6 +37,9 @@ const els = {
   overrideReason: document.getElementById("override-reason"),
   overrideResult: document.getElementById("override-result"),
   healthList: document.getElementById("health-list"),
+  reportForm: document.getElementById("report-form"),
+  reportText: document.getElementById("report-text"),
+  reportResult: document.getElementById("report-result"),
   toastContainer: document.getElementById("toast-container"),
   incidentModal: document.getElementById("incident-modal"),
   incidentModalBody: document.getElementById("incident-modal-body"),
@@ -247,6 +250,18 @@ els.overrideForm.addEventListener("submit", async (evt) => {
   } catch (err) {
     els.overrideResult.textContent =
       err.status === 403 ? "Forbidden - admin role required." : `Failed: ${err.message}`;
+  }
+});
+
+els.reportForm.addEventListener("submit", async (evt) => {
+  evt.preventDefault();
+  els.reportResult.textContent = "Parsing...";
+  try {
+    const result = await api.report(session.token, els.reportText.value);
+    els.reportResult.textContent = result.message;
+    els.reportText.value = "";
+  } catch (err) {
+    els.reportResult.textContent = err.status === 422 ? `Rejected: ${err.message}` : `Failed: ${err.message}`;
   }
 });
 

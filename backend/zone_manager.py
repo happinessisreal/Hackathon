@@ -115,10 +115,36 @@ class ZoneRuntime:
         # Rolling window of the last 8 computed scores, for Bonus 2 (trend).
         self.recent_scores: list[float] = []
 
+        # Bonus 4: NL-report advisory terms, each (severity, received_at).
+        # Ephemeral/in-memory by design (same lifetime class as the other
+        # runtime trackers above) - these are soft, decaying hints for
+        # cross-zone triage, never persisted state and never a trigger for
+        # actuation (CLAUDE.md #4). Consumed only by advisory_boost() below,
+        # which priority.py adds to the ranking of zones already CRITICAL.
+        self.advisory_reports: list[tuple[float, dt.datetime]] = []
+
     def record_score(self, score: float) -> None:
         self.recent_scores.append(score)
         if len(self.recent_scores) > 8:
             self.recent_scores.pop(0)
+
+    def add_advisory_report(self, severity: float, received_at: dt.datetime) -> None:
+        self.advisory_reports.append((severity, received_at))
+
+    def advisory_boost(self, now: dt.datetime, decay_seconds: float = 600.0, cap: float = 10.0) -> float:
+        """Sum of each report's `severity * 10` contribution, linearly
+        decaying to 0 over `decay_seconds` (10 min, locked), capped in
+        total at `cap` (10, same cap shape as the unacked-time term)."""
+        total = 0.0
+        fresh: list[tuple[float, dt.datetime]] = []
+        for severity, received_at in self.advisory_reports:
+            elapsed = (now - received_at).total_seconds()
+            if elapsed >= decay_seconds:
+                continue
+            fresh.append((severity, received_at))
+            total += severity * 10.0 * (1 - elapsed / decay_seconds)
+        self.advisory_reports = fresh
+        return min(cap, total)
 
     def gas_value(self, raw: float | None, now: dt.datetime) -> float | None:
         if raw is None:

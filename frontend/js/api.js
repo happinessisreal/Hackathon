@@ -51,4 +51,6 @@ export const api = {
   health: (token) => request("/api/admin/health", { token }),
 
   trend: (token, zoneId) => request(`/api/zones/${zoneId}/trend`, { token }),
+
+  report: (token, text) => request("/api/report", { method: "POST", token, body: { text } }),
 };

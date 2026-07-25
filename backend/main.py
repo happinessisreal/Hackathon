@@ -9,7 +9,7 @@ from backend.config import BASE_DIR
 from backend.database import async_session_maker, engine
 from backend.models import Base
 from backend.pipeline import manager
-from backend.routers import admin, auth, commands, incidents, ingest, ws, zones
+from backend.routers import admin, auth, commands, incidents, ingest, report, ws, zones
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("scsrg")
@@ -41,6 +41,7 @@ app.include_router(zones.router)
 app.include_router(incidents.router)
 app.include_router(admin.router)
 app.include_router(commands.router)
+app.include_router(report.router)
 app.include_router(ws.router)
 
 

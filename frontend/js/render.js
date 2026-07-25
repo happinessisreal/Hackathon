@@ -17,6 +17,28 @@ function relativeTime(iso) {
   return `${(seconds / 3600).toFixed(1)}h ago`;
 }
 
+// Bonus 2: tiny inline sparkline of the last up-to-8 risk scores. Built as
+// raw SVG (no chart library - single-page, no-build-step constraint).
+function buildSparkline(scores) {
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("class", "trend-spark");
+  svg.setAttribute("viewBox", "0 0 60 20");
+  svg.setAttribute("preserveAspectRatio", "none");
+
+  const max = 100; // risk score range is fixed 0-100, not data-relative
+  const step = scores.length > 1 ? 60 / (scores.length - 1) : 0;
+  const points = scores
+    .map((s, i) => `${(i * step).toFixed(1)},${(20 - (Math.min(100, s) / max) * 20).toFixed(1)}`)
+    .join(" ");
+
+  const line = document.createElementNS(svgNS, "polyline");
+  line.setAttribute("points", points);
+  line.setAttribute("class", "trend-spark-line");
+  svg.appendChild(line);
+  return svg;
+}
+
 export function renderZoneGrid(container, zones, { role, onAck, onOpenTimeline }) {
   container.innerHTML = "";
   for (const zone of zones) {
@@ -58,6 +80,19 @@ export function renderZoneGrid(container, zones, { role, onAck, onOpenTimeline }
     score.className = "risk-score";
     score.textContent = zone.offline ? "--" : Math.round(zone.risk_score);
     card.appendChild(score);
+
+    if (zone.trend && zone.trend.scores && zone.trend.scores.length >= 2) {
+      const trendRow = document.createElement("div");
+      trendRow.className = "trend-row";
+      trendRow.appendChild(buildSparkline(zone.trend.scores));
+      if (zone.trend.rising) {
+        const trendChip = document.createElement("span");
+        trendChip.className = "trend-chip";
+        trendChip.textContent = "↗ trending toward CRITICAL";
+        trendRow.appendChild(trendChip);
+      }
+      card.appendChild(trendRow);
+    }
 
     const sensorRow = document.createElement("div");
     sensorRow.className = "sensor-row";

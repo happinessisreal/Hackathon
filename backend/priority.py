@@ -10,6 +10,12 @@ Occupancy is deliberately absent from a zone's own risk_score (life safety
 belongs in cross-zone triage, not the per-zone hazard score) but dominates
 here, alongside "how long has this been ignored" - both signals a purely
 sensor-driven score can't express on its own.
+
+Additive on top of the locked formula (Bonus 4): a decaying advisory term
+from validated NL incident reports, `runtime.advisory_boost()`. It only
+ever touches zones this loop already restricted to CRITICAL (via sensor
+data) - it can re-order the queue, never add a zone the sensors didn't
+already flag, and it never reaches risk_score/state/actuation.
 """
 
 import datetime as dt
@@ -53,13 +59,16 @@ async def compute_priority_queue(db: AsyncSession, manager: ZoneManager, now: dt
 
         occ_bonus = PRIORITY_OCCUPANCY_BONUS if occupied else 0
         unacked_bonus = min(PRIORITY_UNACKED_CAP, unacked_seconds / PRIORITY_UNACKED_DIVISOR)
-        priority = runtime.current_risk_score + occ_bonus + unacked_bonus
+        advisory_bonus = runtime.advisory_boost(now)
+        priority = runtime.current_risk_score + occ_bonus + unacked_bonus + advisory_bonus
 
         parts = [f"Risk {runtime.current_risk_score:.0f}"]
         if occupied:
             parts.append(f"Occupied +{occ_bonus}")
         if unacked_bonus > 0:
             parts.append(f"unacked {unacked_seconds:.0f}s +{unacked_bonus:.0f}")
+        if advisory_bonus > 0:
+            parts.append(f"NL report +{advisory_bonus:.0f}")
         justification = " + ".join(parts) + f" = {priority:.0f}"
 
         entries.append(

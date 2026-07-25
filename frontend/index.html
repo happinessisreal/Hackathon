@@ -94,6 +94,24 @@
       </div>
     </section>
 
+    <section id="report-section">
+      <h2>NL Incident Report</h2>
+      <form id="report-form" class="report-form">
+        <label>
+          Describe what you're seeing (free text)
+          <textarea id="report-text" rows="2" placeholder="e.g. small water leak near the racks in Server Room" required></textarea>
+        </label>
+        <button type="submit">Submit report</button>
+        <p id="report-result" class="hint-text"></p>
+        <p class="hint-text">
+          Advisory only - parsed via LLM (or an offline keyword parser if no
+          key is configured), validated against real zones/hazards, and adds
+          at most +10 to a zone's priority ranking if it's already CRITICAL
+          from sensor data. Never changes risk score/state, never actuates.
+        </p>
+      </form>
+    </section>
+
     <section id="admin-section" hidden>
       <h2>Admin</h2>
       <div class="admin-grid">

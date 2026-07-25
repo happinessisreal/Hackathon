@@ -15,8 +15,14 @@ concurrent races) - not as a substitute for the Wokwi hardware demo.
 - **Phase 4** (firmware): written, cross-checked against the backend
   contract, **not yet Wokwi-smoke-tested by a human** - see
   `firmware/README.md`.
-- **Phase 5** (bonuses 2-4), **Phase 6** (docs/video/submission): not yet
-  started.
+- **Phase 5** (bonuses): **Bonus 2** (short-term risk trend - sparkline +
+  "trending toward CRITICAL" chip) and **Bonus 4** (NL incident reporting -
+  DeepSeek LLM call with an offline keyword-parser fallback, both gated by
+  the same deterministic validation, feeding a decaying advisory term into
+  the priority queue only) done. **Bonus 3** (ML risk prediction) deferred -
+  see `ASSUMPTIONS.md` Phase 5 for the marks-per-hour reasoning; picked back
+  up only if time remains after Phase 6.
+- **Phase 6** (docs/video/submission): not yet started.
 
 See `ASSUMPTIONS.md` for defaults chosen without pausing for confirmation.
 
@@ -49,15 +55,18 @@ is up.
 pytest -q
 ```
 
-45 tests covering: fusion formula math, flame debounce/decay, PIR hold,
+71 tests covering: fusion formula math, flame debounce/decay, PIR hold,
 CRITICAL hysteresis (entry/exit/min-hold/flip-flood suppression), duplicate
 seq dedup, out-of-order/anomaly flagging, incident open/resolve/re-trigger,
 concurrent ack race (exactly-once via DB unique constraint), restart
-recovery (rebuilds state from DB, not SAFE), WS snapshot/broadcast, and
-401/403/404/409/422 auth/RBAC/validation paths. Every automated pass has
-also been re-verified live: a real uvicorn process + real WebSocket client
-(no TestClient), and the dashboard driven end-to-end in an actual browser
-(login, override, live push, ack, resolve, timeline modal, RBAC hiding).
+recovery (rebuilds state from DB, not SAFE), WS snapshot/broadcast,
+401/403/404/409/422 auth/RBAC/validation paths, Bonus 2 trend/slope math,
+and Bonus 4 NL-report parsing (fallback keyword parser, LLM-path validation
+gate, priority-queue advisory boost and its decay/cap). Every automated
+pass has also been re-verified live: a real uvicorn process + real
+WebSocket client (no TestClient), and the dashboard driven end-to-end in an
+actual browser (login, override, live push, ack, resolve, timeline modal,
+RBAC hiding, trend sparkline, NL report round trip).
 
 ## Simulator / scenario driver
 
