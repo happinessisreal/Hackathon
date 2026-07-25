@@ -22,9 +22,15 @@ concurrent races) - not as a substitute for the Wokwi hardware demo.
   the priority queue only) done. **Bonus 3** (ML risk prediction) deferred -
   see `ASSUMPTIONS.md` Phase 5 for the marks-per-hour reasoning; picked back
   up only if time remains after Phase 6.
-- **Phase 6** (docs/video/submission): not yet started.
+- **Phase 6** (docs/video/submission): `DOCUMENTATION.md`, `VIDEO_SCRIPT.md`,
+  and `SUBMISSION.md` written. **Video not yet recorded** - blocked on the
+  Phase 4 Wokwi smoke-test above; see `SUBMISSION.md` for the full
+  checklist of what's left.
 
-See `ASSUMPTIONS.md` for defaults chosen without pausing for confirmation.
+See `ASSUMPTIONS.md` for defaults chosen without pausing for confirmation,
+`DOCUMENTATION.md` for the full architecture/API/schema writeup,
+`VIDEO_SCRIPT.md` for the shot-by-shot recording plan, and `SUBMISSION.md`
+for the submission checklist.
 
 ## Setup (< 10 commands)
 
@@ -110,10 +116,34 @@ Wokwi's simulated network (it can't reach `localhost`; needs a tunnel).
 written and cross-checked against the backend contract and Wokwi's part
 docs, but needs a human smoke-test before it's demo-ready.
 
+**Wokwi project link(s)**: `[TODO - add the saved/shared Wokwi project
+URL(s) here once the smoke-test in firmware/README.md is done]`.
+
+## Bonus 4 setup (NL incident reporting)
+
+Works offline out of the box (regex/keyword fallback parser, no key
+required). To use the real LLM path, put a DeepSeek (or any OpenAI-
+compatible `chat/completions` provider) key in `.env`:
+
+```bash
+LLM_API_KEY=sk-...
+LLM_PROVIDER=deepseek
+LLM_BASE_URL=https://api.deepseek.com/v1
+LLM_MODEL=deepseek-chat
+```
+
+`.env` is gitignored - never commit a real key. If the key is missing, or
+the call errors/times out, `/api/report` degrades to the offline parser
+automatically and the response's `understood.source` field says which path
+was actually used (`"llm"` or `"fallback"`) - check this before recording
+the Bonus 4 segment of the video (see `VIDEO_SCRIPT.md`'s pre-recording
+checklist).
+
 ## API
 
-See the locked table in `CLAUDE.md`; full request/response examples land in
-`DOCUMENTATION.md` (Phase 6).
+See the locked table in `CLAUDE.md` for the authoritative list; full
+request/response example payloads for every endpoint are in
+`DOCUMENTATION.md` §7.
 
 ## Backup
 
