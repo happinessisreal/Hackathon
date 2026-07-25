@@ -12,3 +12,7 @@ backups/*.db
 node_modules/
 .DS_Store
 .playwright-mcp/
+
+# The organizers' case brief - their material, not our deliverable; kept
+# locally for reference but never committed to the public submission repo.
+RoboFusion_1.0_SCS-RG_Round1_Case.pdf

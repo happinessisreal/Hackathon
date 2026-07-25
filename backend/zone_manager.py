@@ -114,6 +114,22 @@ class ZoneRuntime:
 
         # Rolling window of the last 8 computed scores, for Bonus 2 (trend).
         self.recent_scores: list[float] = []
+        # Matching windows of applied gas/water levels - the per-channel
+        # slope features Bonus 3's predictor was trained on (ml/train.py
+        # FEATURE_NAMES). None readings (sensor offline / warm-up) record
+        # as 0.0, same as the fusion formula treats them.
+        self.recent_gas: list[float] = []
+        self.recent_water: list[float] = []
+
+        # Bonus 1: camera-based occupancy second opinion. The camera node
+        # (sim/camera_node.py - frame-difference motion detection) reports
+        # independently of the PIR. Used ONLY to cross-check PIR for the
+        # inter-zone priority ranking ("reduce false 'zone is empty'
+        # readings that would otherwise skew the priority ranking") - the
+        # locked risk formula's occupancy input stays PIR-only.
+        self.camera_occupied: bool | None = None
+        self.camera_confidence: float = 0.0
+        self.camera_ts: dt.datetime | None = None
 
         # Bonus 4: NL-report advisory terms, each (severity, received_at).
         # Ephemeral/in-memory by design (same lifetime class as the other
@@ -123,10 +139,48 @@ class ZoneRuntime:
         # which priority.py adds to the ranking of zones already CRITICAL.
         self.advisory_reports: list[tuple[float, dt.datetime]] = []
 
-    def record_score(self, score: float) -> None:
+    def record_score(self, score: float, gas: float | None = None, water: float | None = None) -> None:
         self.recent_scores.append(score)
-        if len(self.recent_scores) > 8:
-            self.recent_scores.pop(0)
+        self.recent_gas.append(gas if gas is not None else 0.0)
+        self.recent_water.append(water if water is not None else 0.0)
+        for window in (self.recent_scores, self.recent_gas, self.recent_water):
+            if len(window) > 8:
+                window.pop(0)
+
+    CAMERA_STALE_SECONDS = 5.0
+
+    def update_camera(self, occupied: bool, confidence: float, now: dt.datetime) -> None:
+        self.camera_occupied = occupied
+        self.camera_confidence = max(0.0, min(1.0, confidence))
+        self.camera_ts = now
+
+    def camera_fresh(self, now: dt.datetime) -> bool:
+        return self.camera_ts is not None and (now - self.camera_ts).total_seconds() <= self.CAMERA_STALE_SECONDS
+
+    def camera_view(self, now: dt.datetime) -> dict | None:
+        """Cross-check summary for the dashboard; None if no camera node
+        has ever reported for this zone."""
+        if self.camera_ts is None:
+            return None
+        fresh = self.camera_fresh(now)
+        return {
+            "occupied": self.camera_occupied,
+            "confidence": round(self.camera_confidence, 2),
+            "fresh": fresh,
+            "agrees_with_pir": (bool(self.occupancy.stable_value) == bool(self.camera_occupied)) if fresh else None,
+        }
+
+    def effective_occupied(self, now: dt.datetime) -> tuple[bool, str]:
+        """Occupancy for the PRIORITY RANKING only (never the risk score):
+        PIR, backed up by a fresh camera detection. Returns (occupied,
+        source) where source is 'pir', 'camera', or 'none' - the
+        justification line shows which sensor put the zone in the occupied
+        queue position."""
+        if self.occupancy.stable_value:
+            return True, "pir"
+        if self.camera_fresh(now) and self.camera_occupied:
+            return True, "camera"
+        return False, "none"
 
     def add_advisory_report(self, severity: float, received_at: dt.datetime) -> None:
         self.advisory_reports.append((severity, received_at))

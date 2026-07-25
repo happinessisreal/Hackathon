@@ -84,6 +84,10 @@ async def seed(total_readings: int, total_incidents: int) -> None:
                     "peak_risk": round(random.uniform(65, 100), 2),
                     "status": status,
                     "resolved_at": resolved,
+                    "hazard": random.choices(
+                        ["fire", "water", "fire+water", "gas", "fire+gas", "manual"],
+                        weights=[0.35, 0.25, 0.15, 0.1, 0.1, 0.05],
+                    )[0],
                 }
             )
         for start in range(0, len(incident_rows), 2000):

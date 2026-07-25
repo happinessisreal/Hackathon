@@ -40,7 +40,11 @@ async def compute_priority_queue(db: AsyncSession, manager: ZoneManager, now: dt
         if zone is None:
             continue
 
-        occupied = bool(runtime.occupancy.stable_value)
+        # Bonus 1: PIR backed up by the camera cross-check - a fresh camera
+        # detection can rescue a false "zone is empty" (dead/blocked PIR)
+        # so the ranking doesn't demote an occupied zone. Ranking only;
+        # the zone's own risk score still uses PIR alone (locked formula).
+        occupied, occupancy_source = runtime.effective_occupied(now)
         unacked_seconds = 0.0
         if runtime.open_incident_id is not None:
             incident = await db.get(Incident, runtime.open_incident_id)
@@ -64,7 +68,8 @@ async def compute_priority_queue(db: AsyncSession, manager: ZoneManager, now: dt
 
         parts = [f"Risk {runtime.current_risk_score:.0f}"]
         if occupied:
-            parts.append(f"Occupied +{occ_bonus}")
+            source_note = " (camera)" if occupancy_source == "camera" else ""
+            parts.append(f"Occupied{source_note} +{occ_bonus}")
         if unacked_bonus > 0:
             parts.append(f"unacked {unacked_seconds:.0f}s +{unacked_bonus:.0f}")
         if advisory_bonus > 0:

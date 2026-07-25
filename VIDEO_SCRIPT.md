@@ -18,9 +18,17 @@ and which test case it satisfies**, as it happens, per CLAUDE.md.
    the offline parser on any error/timeout — if it's not actually reaching
    DeepSeek, the on-camera narration must say "offline keyword parser,"
    not "LLM," or the claim doesn't match what's on screen.
-5. Have two terminals ready for the double-ack race (Section B) and one
+5. **Camera node (Bonus 1)**: start
+   `python sim/camera_node.py --zone "IoT Lab" --webcam` (or `--video
+   footage.mp4`; `--synthetic` as last resort — narration must then say
+   "scripted pattern demonstrating the integration"). Confirm the `CAM`
+   chip appears on the IoT Lab card before recording.
+6. **Model artifact (Bonus 3)**: confirm `ml/model.json` exists (ships in
+   the repo; `python ml/train.py` regenerates it) and that a WARNING-band
+   zone shows the violet `Predicted Risk` chip.
+7. Have two terminals ready for the double-ack race (Section B) and one
    more for the RBAC `curl` 403 (Section C).
-6. `python sim/seed.py --readings 10000 --incidents 300` against a
+8. `python sim/seed.py --readings 10000 --incidents 300` against a
    **separate** DB/port beforehand if you want the 10k-row timing shot to
    use real numbers instead of a smaller live count — see Section D.
 
@@ -29,12 +37,12 @@ and which test case it satisfies**, as it happens, per CLAUDE.md.
 | Segment | Time | Covers |
 |---|---|---|
 | Intro | 0:00–0:20 | System live, idle |
-| A | 0:20–2:00 | tc1–tc5 |
-| B | 2:00–3:20 | Malformed / dup-seq / ack race / restart |
-| C | 3:20–4:30 | Priority queue, RBAC, timeline |
-| D | 4:30–5:10 | Schema/ER, delete-blocked, indexed query |
-| E | 5:10–6:20 | tc22 finale |
-| Bonus | 6:20–6:55 | Trend, NL report |
+| A | 0:20–1:55 | tc1–tc5 |
+| B | 1:55–3:05 | Malformed / dup-seq / ack race / restart |
+| C | 3:05–4:10 | Priority queue, RBAC, timeline (+hazard/duration) |
+| D | 4:10–4:45 | Schema/ER, delete-blocked, indexed query |
+| E | 4:45–5:45 | tc22 finale + tc24 load + tc25 consistency |
+| Bonus | 5:45–6:55 | All four: camera, trend, ML prediction, NL report |
 | Close | 6:55–7:00 | Wrap |
 
 ---
@@ -49,145 +57,126 @@ boards visible in a second window/PiP.
 Every score you'll see is computed server-side from raw sensor values —
 the nodes never send a state, only numbers."
 
-## 0:20–2:00 — Section A: tc1–tc5
+## 0:20–1:55 — Section A: tc1–tc5
 
 Rapid labeled cuts: sensor action in Wokwi → dashboard reaction, cut fast.
 Drive via the Wokwi UI directly (click-and-hold the flame pushbutton, drag
 the water potentiometer, click the PIR) — better footage than the Python
-sim for this section, per the driver's own design intent.
+sim for this section.
 
-- **[tc1a–tc1d] Flame** (~25s): no flame → SAFE. Quick flicker (under
-  ~3.75s / 5 readings) → "flicker ignored, no trigger — debounce working."
-  Hold past 5 readings → "sustained flame, fire contributes 40 points."
-  Release → "removal — watch the score decay smoothly over 5 seconds, not
-  snap to zero."
-- **[tc2a–tc2d] Gas** (~20s, IoT Lab only): baseline 0. Slow ramp on the
-  gas sensor → "proportional rise, no step jump." Mention warm-up: "for
-  the first 30 seconds after a node boots, gas readings are ignored
-  entirely — prevents a false trigger on cold start" (cut to a freshly-
-  booted Serial log timestamp if available, or state it and move on).
-- **[tc3a–tc3d] Water** (~20s, Server Room / Data Science Lab): dry → SAFE.
-  Raise the potentiometer → "rising, proportional — this is our
-  flood-equivalent hazard, weighted equal to gas because these are server
-  rooms." Cross into WARNING/CRITICAL range. Lower it back → "cleared,
-  resets correctly, not sticky."
-- **[tc4a–tc4d] PIR** (~20s, Data Science Lab): empty. Click PIR → hold
-  past 1.5s → "occupancy commits, +10 to score." Quick double-click
-  (flicker) → "held under 1.5s, correctly ignored — no log spam." Disable/
-  disconnect the sensor → "OFFLINE badge appears — offline is never shown
-  as safe."
-- **[tc5a–tc5d] Actuation** (~15s): trigger CRITICAL on one zone → "buzzer
-  and red LED fire within about a second of the state entering CRITICAL —
-  watch the relay module too." Drop to WARNING → "yellow LED only, no
-  buzzer, no relay." Back to SAFE → "green, everything off." Trigger two
-  zones CRITICAL the same second (can run
-  `python sim/driver.py tc5 --base-url http://127.0.0.1:8801` against a
-  throwaway port beforehand and just narrate the recorded result, or do it
-  live with two Wokwi tabs) → "both act independently and correctly."
+- **[tc1a–tc1d] Flame** (~22s): no flame → SAFE. Quick flicker (under
+  ~3.75s / 5 readings) → "flicker ignored — debounce working." Hold past 5
+  readings → "sustained flame, fire contributes 40 points." Release →
+  "watch the score decay smoothly over 5 seconds, not snap to zero."
+- **[tc2a–tc2d] Gas** (~18s, IoT Lab only): baseline 0. Slow ramp →
+  "proportional rise, no step jump." Mention warm-up: "for the first 30
+  seconds after a node boots, gas readings are ignored entirely — no false
+  trigger on cold start."
+- **[tc3a–tc3d] Water** (~18s, Server Room): dry → SAFE. Raise the
+  potentiometer → "rising, proportional — our flood-equivalent hazard,
+  weighted equal to gas because these are server rooms." Cross the band.
+  Lower it → "cleared, resets correctly, not sticky."
+- **[tc4a–tc4d] PIR** (~18s, Data Science Lab): empty. Click PIR, hold past
+  1.5s → "occupancy commits, +10." Quick flicker → "under the hold,
+  correctly ignored." Disconnect the sensor → "OFFLINE badge — offline is
+  never shown as safe."
+- **[tc5a–tc5d] Actuation** (~19s): drive CRITICAL → "buzzer, red LED and
+  relay all fire within about a second of state entry." Drop to WARNING →
+  "yellow only, no relay, no buzzer." Back to SAFE → "reset, logged." Two
+  zones CRITICAL same second → "each responds independently."
 
-## 2:00–3:20 — Section B: protocol edge cases + restart recovery
+## 1:55–3:05 — Section B: protocol edge cases + restart recovery
 
-Switch to a terminal + the dashboard side by side.
+Terminal + dashboard side by side.
 
-- **[tc6b] Malformed payload** (~15s): `curl` a negative `water_norm` at
-  `/api/ingest` → show the `422` body on screen. "Rejected with a clear
-  field error, never silently absorbed or clamped."
-- **[tc6d] Duplicate seq** (~15s): POST the same `seq` twice → second
-  response shows `"duplicate": true`. "Not counted twice — score doesn't
-  move on the replay."
-- **[tc7b] Double-ack race** (~30s): drive one zone CRITICAL, then fire
-  two `curl` acks from two terminals **at the same time** (or
-  `python sim/driver.py tc7` and narrate the captured result) → one `200`,
-  one `409`. "Exactly one acknowledgment — enforced by a database unique
-  constraint, not just application logic, so this holds even under a real
-  race."
-- **[TC9a] Restart recovery** (~20s): with an incident still open, kill
-  and restart `uvicorn` on camera. Refresh the dashboard → the zone is
-  still CRITICAL, the incident still open. "The backend rebuilt this from
-  the database on startup — it never assumed SAFE just because it
-  restarted."
+- **[tc6b] Malformed payload** (~13s): `curl` a negative `water_norm` →
+  `422` body on screen. "Rejected with a clear field error, never silently
+  absorbed."
+- **[tc6d] Duplicate seq** (~13s): same `seq` twice → `"duplicate": true`.
+  "Not counted twice — the score doesn't move on the replay."
+- **[tc7b] Double-ack race** (~25s): zone CRITICAL, two `curl` acks from
+  two terminals at once → one `200`, one `409`. "Exactly one
+  acknowledgment — enforced by a database unique constraint, not
+  application logic, so it holds under a real race."
+- **[TC9a] Restart recovery** (~19s): with an incident open, kill and
+  restart `uvicorn` on camera. Refresh → still CRITICAL, incident still
+  open. "Rebuilt from the database on startup — never assumes SAFE."
 
-## 3:20–4:30 — Section C: priority queue, RBAC, timeline
+## 3:05–4:10 — Section C: priority queue, RBAC, timeline
 
-- **[TC12a–d] Priority queue** (~25s): with ≥2 zones CRITICAL (carry state
-  over from Section B or trigger fresh), show the queue panel, the pulsing
-  `#1` entry, and the `⚠ MOST URGENT` banner. Read one justification line
-  aloud: "`Risk 78 + Occupied +15 + unacked 90s +6 = 99` — every point in
-  that ranking is visible, not a black box."
-- **[TC13] RBAC** (~25s): log in as `staff1` — "no override panel, no
-  health tab, hidden entirely from the UI." Then, in a terminal, `curl
-  POST /api/admin/override` with the staff token → `403`. "Enforced
-  server-side too — hiding the button isn't the security boundary."
-- **[TC14] Timeline** (~20s): click an incident → modal shows
-  first-trigger → ack (who, when) → recovery as a real row-per-transition
-  timeline. "Nothing here is reconstructed — every row is a stored
-  transition."
+- **[TC12a–d] Priority queue** (~22s): ≥2 zones CRITICAL, show the queue,
+  the pulsing `#1`, the `⚠ MOST URGENT` banner. Read one justification
+  line aloud: "`Risk 78 + Occupied +15 + unacked 90s +6 = 99` — every
+  point in the ranking is visible, not a black box."
+- **[TC13] RBAC** (~22s): log in as `staff1` — "no override panel, no
+  health tab." Then `curl POST /api/admin/override` with the staff token →
+  `403`. "Enforced server-side too — hiding the button isn't the security
+  boundary."
+- **[TC14] Timeline** (~21s): show the incident table — point at the
+  **Hazard** column ("fire+water — the dominant contributions at the
+  moment the incident opened; manual for override-opened ones") and the
+  **Duration** column. Filter by hazard = water on camera. Click an
+  incident → modal: first-trigger → ack (who/when) → recovery. "Every row
+  is a stored transition, nothing is reconstructed."
 
-## 4:30–5:10 — Section D: schema, delete-block, indexed query
+## 4:10–4:45 — Section D: schema, delete-block, indexed query
 
-- **[Schema]** (~15s): show the ER diagram from `DOCUMENTATION.md` §6 on
-  screen. "Every constraint you're about to see enforced live is drawn
-  here first."
-- **[TC18b] Delete-zone blocked** (~10s): attempt to delete a zone that
-  has an open incident (DB browser or a quick script calling the ORM
-  delete) → show the `RESTRICT` failure. "A zone with any history — even
-  one reading — can't be deleted out from under that history."
-- **[TC19] Indexed query on 10k+ rows** (~15s): hit
-  `GET /api/incidents?status=open` against the pre-seeded 10k-reading /
-  300-incident DB from the pre-recording checklist, show the response
-  time (browser devtools network tab or a timed `curl`). "Still fast at
-  scale — this is the `(status, opened_at)` index doing its job."
+- **[TC17/TC29 Schema]** (~12s): ER diagram from `DOCUMENTATION.md` §6 on
+  screen. "Six related tables, every FK explicit, ON DELETE RESTRICT
+  everywhere."
+- **[TC18b] Delete-zone blocked** (~10s): attempt to delete a zone with an
+  open incident → RESTRICT failure on screen. "History can't be orphaned."
+- **[TC19] Indexed query on 10k+ rows** (~13s): `GET /api/incidents?...`
+  against the seeded DB, show the response time. "The `(status,
+  opened_at)` index — stated in the docs with reasoning — keeps this
+  instant at 10,000+ rows."
 
-## 5:10–6:20 — Section E: tc22 finale (continuous, no cuts)
+## 4:45–5:45 — Section E: integration (tc22 + tc24 + tc25)
 
-Either drive this live via the Wokwi UI (two zones) or run
-`python sim/driver.py tc22` against the **live demo server** this one
-time (it's the intended finale, not a throwaway-DB scenario) and film the
-dashboard reacting in real time.
+- **[TC22] Finale** (~40s, one continuous take — run
+  `python sim/driver.py tc22` against the live server, or drive both zones
+  from the Wokwi UI): "IoT Lab and Server Room building toward CRITICAL
+  concurrently... both crossed — the queue ranks them, occupancy and
+  unacked time factored in... acknowledging in priority order... and
+  recovery — both back to SAFE, idle state."
+- **[TC24] Combined load** (~12s): `python sim/driver.py tc24` — "three
+  zones live, one cycling SAFE→WARNING→CRITICAL rapidly; status stays
+  correct and the API stays responsive — worst-case latency on screen."
+- **[TC25] Consistency** (~8s): pause on one zone — point at the Wokwi
+  LED, the API response, and the dashboard card in the same frame. "Same
+  state in all three places, because there's only one source of truth."
 
-**Say, continuously, as it happens**: "IoT Lab and Server Room are both
-building toward CRITICAL right now, independently — fire and occupancy in
-IoT Lab, a simulated coolant leak in Server Room. ... Both just crossed —
-watch the priority queue rank them, occupancy and unacked time both
-factored in. ... Acknowledging in priority order — highest-priority zone
-first. ... And recovery: both back to SAFE, clean idle state, ready for
-the next incident."
+## 5:45–6:55 — Bonuses (all four attempted)
 
-**Directing note**: if the Bonus section (next) needs a live CRITICAL zone
-for the NL-report demo, cut this section's on-camera "recovery" beat short
-and leave Server Room acknowledged-but-still-CRITICAL going into 6:20 —
-resolve it for real once the Bonus section is done recording.
-
-## 6:20–6:55 — Bonuses
-
-- **[Bonus 2] Trend** (~10s): point at a WARNING zone's card. "Sparkline
-  and a rising-trend flag — 'trending toward CRITICAL' — computed from the
-  slope of its last 8 scores, purely informational."
-- **[Bonus 4] NL incident report** (~25s): **with Server Room still
-  CRITICAL from Section E** (see directing note above), type a report —
-  e.g. "small water leak near the racks in Server Room" — into the NL
-  Report panel and submit. Show the confirmation message. Then show the
-  priority queue's justification line updating to include
-  `+ NL report +N`. "That's a free-text report, parsed by
-  [an LLM / an offline keyword parser — say whichever the pre-recording
-  check in step 4 actually confirmed], validated against real zones and
-  hazards before it's trusted at all. It only ever adjusts this ranking,
-  on a zone sensors already flagged CRITICAL — it cannot create an
-  incident, cannot touch the risk score, and cannot trigger the buzzer or
-  relay. Only the live sensor-computed score can do that."
-
-*(If Bonus 3 — ML predicted-risk chip — is built before recording, add a
-~10s beat here showing the chip and stating "structurally separate from
-the live score, and the prediction path has no write access to actuation
-at all — not just by convention, there's no code path." Not built as of
-this script's writing; see `ASSUMPTIONS.md` Phase 5 for why it was cut in
-favor of finishing docs/video on schedule.)*
+- **[Bonus 1] Camera occupancy cross-check** (~20s): with the camera node
+  running, cover the PIR (or use a zone where PIR reads empty) while
+  moving in front of the webcam → CAM chip shows `occupied`, disagreement
+  highlighted. If that zone is CRITICAL, show the justification line:
+  `Occupied (camera) +15`. **Say**: "Frame-difference detection on a
+  [webcam / video / scripted pattern] standing in for the ESP32-CAM on
+  Track B — it cross-checks the PIR and can rescue a false 'empty' in the
+  priority ranking. It never touches the risk score."
+- **[Bonus 2] Trend** (~10s): WARNING zone's card → sparkline + "trending
+  toward CRITICAL" chip. "Slope of the last 8 scores — early warning
+  before the threshold."
+- **[Bonus 3] ML prediction** (~20s): violet `Predicted Risk N% (ML,
+  advisory)` chip on a rising zone. **Say**: "A logistic regression
+  trained on synthetic data — stated plainly in the docs with accuracy
+  0.84, precision 0.45, recall 0.86 on held-out data. It's a separate
+  advisory chip, never mixed with the live score, and the prediction path
+  has no code route to the relay or buzzer — there's a test that fails the
+  build if anyone ever wires it in."
+- **[Bonus 4] NL report** (~20s): with Server Room still CRITICAL, type
+  "small water leak near the racks in Server Room" → confirmation reply →
+  queue justification updates with `+ NL report +N`. **Say**: "Free text →
+  [LLM / offline parser] → a deterministic validation gate — zone must
+  exist, hazard in the enum, severity clamped — before it may touch the
+  ranking. Advisory only, decays over 10 minutes, never actuates."
 
 ## 6:55–7:00 — Close
 
-**Show**: dashboard back at idle, all zones SAFE (resolve Server Room from
-the Bonus section here, or immediately after cutting).
+**Show**: dashboard back at idle, all zones SAFE.
 
-**Say**: "SCS-RG, Team `[TEAM_NAME]` — Track B, Wokwi ESP32, backend-only
-scoring, single source of truth, and every actuation traceable to a real
-sensor reading. Thank you."
+**Say**: "SCS-RG, Team `[TEAM_NAME]` — Track B, all four bonuses,
+backend-only scoring, one source of truth, every actuation traceable to a
+real sensor reading. Thank you."

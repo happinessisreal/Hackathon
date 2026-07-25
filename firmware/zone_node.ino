@@ -78,6 +78,31 @@ uint32_t seqCounter = 0;
 unsigned long lastPostMs = 0;
 unsigned long lastCommandPollMs = 0;
 
+// TC9b offline cache: readings that fail to POST are kept in RAM (newest
+// last) and resynced in original order - with their original seq numbers -
+// once connectivity returns. Mirrors sim/node.py's ZoneNode._buffer, the
+// reference implementation already validated against the backend. At 750ms
+// per reading, 64 slots is ~48s of outage; beyond that the oldest reading
+// is dropped (documented, bounded memory beats an OOM crash mid-demo).
+const int PENDING_CAPACITY = 64;
+String pendingReadings[PENDING_CAPACITY];
+int pendingCount = 0;
+
+void dropOldestPending() {
+  for (int i = 1; i < pendingCount; i++) {
+    pendingReadings[i - 1] = pendingReadings[i];
+  }
+  pendingCount--;
+}
+
+void enqueueReading(const String &body) {
+  if (pendingCount == PENDING_CAPACITY) {
+    Serial.printf("[%s] offline buffer full, dropping oldest reading\n", ZONE_NAME);
+    dropOldestPending();
+  }
+  pendingReadings[pendingCount++] = body;
+}
+
 WiFiClientSecure secureClient;
 WiFiClient plainClient;
 
@@ -142,6 +167,23 @@ void beginRequest(HTTPClient &http, const String &url) {
   }
 }
 
+bool postBody(const String &body) {
+  HTTPClient http;
+  beginRequest(http, backendUrl("/api/ingest"));
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-Zone-Key", ZONE_API_KEY);
+  int code = http.POST(body);
+  bool ok = code == 200;
+  if (ok) {
+    Serial.printf("[%s] POST /api/ingest -> %s\n", ZONE_NAME, http.getString().c_str());
+  } else {
+    Serial.printf("[%s] POST /api/ingest failed, code=%d (%d reading(s) buffered)\n",
+                  ZONE_NAME, code, pendingCount);
+  }
+  http.end();
+  return ok;
+}
+
 void postReading() {
   StaticJsonDocument<320> doc;
   doc["seq"] = seqCounter++;
@@ -157,23 +199,18 @@ void postReading() {
   String body;
   serializeJson(doc, body);
 
-  HTTPClient http;
-  beginRequest(http, backendUrl("/api/ingest"));
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("X-Zone-Key", ZONE_API_KEY);
-  int code = http.POST(body);
-  if (code == 200) {
-    Serial.printf("[%s] POST /api/ingest -> %s\n", ZONE_NAME, http.getString().c_str());
-  } else {
-    Serial.printf("[%s] POST /api/ingest failed, code=%d\n", ZONE_NAME, code);
-    // A production node would buffer this reading in RAM and resync it
-    // (in original seq order) once connectivity returns - see
-    // sim/node.py's ZoneNode._buffer / _flush_buffer for the reference
-    // behavior this mirrors (TC9b). Left as a follow-up here since the
-    // Wokwi demo network doesn't exercise real disconnects; the Python
-    // simulator is the vehicle for that scenario (sim/scenarios.py tc23a).
+  // Everything goes through the queue: newest reading is appended, then
+  // the queue is flushed oldest-first. Online, that's a single POST; after
+  // an outage, buffered readings resync in original order (original seq
+  // numbers intact - the backend's (zone_id, seq) dedup makes any overlap
+  // harmless) before the newest one goes out. (TC9b)
+  enqueueReading(body);
+  while (pendingCount > 0) {
+    if (!postBody(pendingReadings[0])) {
+      return;  // still offline - retry the same queue next cycle
+    }
+    dropOldestPending();
   }
-  http.end();
 }
 
 void pollCommand() {

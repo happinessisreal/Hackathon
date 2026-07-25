@@ -26,6 +26,30 @@ SENSOR_FIELD_MAP = {
     "pir": "occupancy",
 }
 
+HAZARD_CONTRIBUTION_FLOOR = 10.0  # points; a hazard below this isn't "the" cause
+
+
+def dominant_hazards(fire_level: float, gas_value: float | None, water_norm: float | None) -> str:
+    """Human-readable hazard label for an incident (TC14: the log must show
+    hazard type, not just a score). Every hazard contributing >= the floor
+    is listed, largest first, e.g. "fire", "fire+water". Occupancy is not a
+    hazard type; it never appears here."""
+    from backend.config import WEIGHT_FIRE, WEIGHT_GAS, WEIGHT_WATER
+
+    contributions = {
+        "fire": WEIGHT_FIRE * fire_level,
+        "gas": WEIGHT_GAS * (gas_value or 0.0),
+        "water": WEIGHT_WATER * (water_norm or 0.0),
+    }
+    named = sorted(
+        ((h, c) for h, c in contributions.items() if c >= HAZARD_CONTRIBUTION_FLOOR),
+        key=lambda item: -item[1],
+    )
+    if not named:
+        top = max(contributions, key=contributions.get)
+        return top if contributions[top] > 0 else "mixed"
+    return "+".join(h for h, _ in named)
+
 
 async def _update_sensor_statuses(db: AsyncSession, zone_id: int, payload: IngestPayload) -> None:
     sensors = (await db.execute(select(Sensor).where(Sensor.zone_id == zone_id))).scalars().all()
@@ -46,6 +70,7 @@ async def _transition_to(
     cause: str,
     now: dt.datetime,
     reason: str | None = None,
+    hazard: str | None = None,
 ) -> ZoneTransition | None:
     runtime.current_risk_score = new_score
 
@@ -77,7 +102,7 @@ async def _transition_to(
         runtime.critical_entered_at = None
 
     if new_state == CRITICAL and old_state != CRITICAL:
-        incident = Incident(zone_id=zone.id, opened_at=now, peak_risk=new_score, status="open")
+        incident = Incident(zone_id=zone.id, opened_at=now, peak_risk=new_score, status="open", hazard=hazard)
         db.add(incident)
         await db.flush()
         runtime.open_incident_id = incident.id
@@ -159,10 +184,19 @@ async def process_reading(
         score = risk_score(fire_level, gas_value, payload.water_norm, occupancy_factor)
 
         runtime.last_applied_ts_device = payload.ts_device
-        runtime.record_score(score)
+        runtime.record_score(score, gas=gas_value, water=payload.water_norm)
 
         new_state = classify(score, runtime.current_state, runtime.critical_entered_at, now)
-        transition = await _transition_to(db, zone, runtime, new_state, score, cause="sensor", now=now)
+        transition = await _transition_to(
+            db,
+            zone,
+            runtime,
+            new_state,
+            score,
+            cause="sensor",
+            now=now,
+            hazard=dominant_hazards(fire_level, gas_value, payload.water_norm),
+        )
         await db.commit()
 
         await bus.publish(
@@ -191,7 +225,15 @@ async def process_override(
 
     async with manager.lock_for(zone.id):
         transition = await _transition_to(
-            db, zone, runtime, target_state, runtime.current_risk_score, cause="manual", now=now, reason=reason
+            db,
+            zone,
+            runtime,
+            target_state,
+            runtime.current_risk_score,
+            cause="manual",
+            now=now,
+            reason=reason,
+            hazard="manual",
         )
         await db.commit()
 

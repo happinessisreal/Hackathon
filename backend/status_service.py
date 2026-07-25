@@ -13,6 +13,7 @@ from backend.config import OFFLINE_AFTER_SECONDS
 from backend.models import Incident, Sensor, Zone
 from backend.pipeline import SENSOR_FIELD_MAP
 from backend.pipeline import manager as zone_manager
+from backend.prediction import predict_for_runtime
 from backend.priority import compute_priority_queue
 from backend.trend import compute_trend
 
@@ -54,6 +55,13 @@ async def build_zone_status_payload(db: AsyncSession, now: dt.datetime | None = 
                 # separate poll) so it stays consistent with CLAUDE.md rule 2
                 # - the WS push and the grid never disagree on what's rising.
                 "trend": compute_trend(runtime.recent_scores, runtime.current_state),
+                # Bonus 3: display-only ML estimate; None when no model
+                # artifact or not enough history. Structurally separate
+                # from risk_score/state - see backend/prediction.py.
+                "predicted_risk": predict_for_runtime(runtime, now),
+                # Bonus 1: camera occupancy cross-check summary (None when
+                # no camera node is reporting for this zone).
+                "camera": runtime.camera_view(now),
             }
         )
 

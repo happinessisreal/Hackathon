@@ -1,0 +1,57 @@
+{
+  "model": "logistic_regression",
+  "trained_at": "2026-07-25T09:36:44.512747+00:00",
+  "data": "synthetic (see ml/train.py docstring - generated through the real backend fusion/trend code)",
+  "label": "risk_score >= 65 within 120s",
+  "features": [
+    "fire_level",
+    "gas_norm",
+    "water_norm",
+    "occupancy",
+    "gas_slope",
+    "water_slope",
+    "score_slope",
+    "risk_score"
+  ],
+  "scaler_mean": [
+    0.054934,
+    0.188803,
+    0.10821,
+    0.534184,
+    0.000653,
+    0.000254,
+    0.021586,
+    14.964526
+  ],
+  "scaler_scale": [
+    0.226452,
+    0.25786,
+    0.194869,
+    0.49883,
+    0.004048,
+    0.004011,
+    0.649229,
+    13.796579
+  ],
+  "coef": [
+    -0.078499,
+    0.852866,
+    -0.140627,
+    0.378274,
+    1.178348,
+    0.184423,
+    0.07776,
+    0.434078
+  ],
+  "intercept": -0.879213,
+  "metrics": {
+    "accuracy": 0.8366,
+    "precision": 0.4494,
+    "recall": 0.8629,
+    "threshold": 0.4979,
+    "positive_rate": 0.1369,
+    "test_samples": 40724,
+    "train_samples": 97736,
+    "note": "High-recall/moderate-precision operating point, on purpose: an advisory early-warning chip should catch most real onsets (~86%) 1-2 min ahead even at the cost of flagging some rising-but-self-resolving ramps. It cannot actuate anything regardless."
+  }
+}

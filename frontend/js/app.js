@@ -27,6 +27,7 @@ const els = {
   incidentFilters: document.getElementById("incident-filters"),
   filterZone: document.getElementById("filter-zone"),
   filterStatus: document.getElementById("filter-status"),
+  filterHazard: document.getElementById("filter-hazard"),
   filterFrom: document.getElementById("filter-from"),
   filterTo: document.getElementById("filter-to"),
   incidentTableBody: document.getElementById("incident-table-body"),
@@ -145,6 +146,7 @@ async function refreshIncidentTable() {
   const filters = {
     zone: els.filterZone.value,
     status: els.filterStatus.value,
+    hazard: els.filterHazard.value,
     from: els.filterFrom.value ? new Date(els.filterFrom.value).toISOString() : "",
     to: els.filterTo.value ? new Date(els.filterTo.value).toISOString() : "",
   };

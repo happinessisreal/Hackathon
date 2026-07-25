@@ -15,13 +15,16 @@ concurrent races) - not as a substitute for the Wokwi hardware demo.
 - **Phase 4** (firmware): written, cross-checked against the backend
   contract, **not yet Wokwi-smoke-tested by a human** - see
   `firmware/README.md`.
-- **Phase 5** (bonuses): **Bonus 2** (short-term risk trend - sparkline +
-  "trending toward CRITICAL" chip) and **Bonus 4** (NL incident reporting -
-  DeepSeek LLM call with an offline keyword-parser fallback, both gated by
-  the same deterministic validation, feeding a decaying advisory term into
-  the priority queue only) done. **Bonus 3** (ML risk prediction) deferred -
-  see `ASSUMPTIONS.md` Phase 5 for the marks-per-hour reasoning; picked back
-  up only if time remains after Phase 6.
+- **Phase 5** (bonuses): **all four attempted.** Bonus 1 (camera occupancy
+  cross-check - real frame-difference detection on a webcam/video standing
+  in for the ESP32-CAM on Track B, PIR cross-check feeding the priority
+  ranking only), Bonus 2 (short-term risk trend - sparkline + "trending
+  toward CRITICAL" chip), Bonus 3 (ML risk prediction - logistic
+  regression on clearly-stated synthetic data, metrics reported, pure-
+  Python serving, code-level no-actuation guard), Bonus 4 (NL incident
+  reporting - DeepSeek LLM call with an offline keyword-parser fallback,
+  both gated by the same deterministic validation, feeding a decaying
+  advisory term into the priority queue only).
 - **Phase 6** (docs/video/submission): `DOCUMENTATION.md`, `VIDEO_SCRIPT.md`,
   and `SUBMISSION.md` written. **Video not yet recorded** - blocked on the
   Phase 4 Wokwi smoke-test above; see `SUBMISSION.md` for the full
@@ -61,18 +64,20 @@ is up.
 pytest -q
 ```
 
-71 tests covering: fusion formula math, flame debounce/decay, PIR hold,
+98 tests covering: fusion formula math, flame debounce/decay, PIR hold,
 CRITICAL hysteresis (entry/exit/min-hold/flip-flood suppression), duplicate
-seq dedup, out-of-order/anomaly flagging, incident open/resolve/re-trigger,
-concurrent ack race (exactly-once via DB unique constraint), restart
-recovery (rebuilds state from DB, not SAFE), WS snapshot/broadcast,
-401/403/404/409/422 auth/RBAC/validation paths, Bonus 2 trend/slope math,
-and Bonus 4 NL-report parsing (fallback keyword parser, LLM-path validation
-gate, priority-queue advisory boost and its decay/cap). Every automated
-pass has also been re-verified live: a real uvicorn process + real
-WebSocket client (no TestClient), and the dashboard driven end-to-end in an
-actual browser (login, override, live push, ack, resolve, timeline modal,
-RBAC hiding, trend sparkline, NL report round trip).
+seq dedup, out-of-order/anomaly flagging, incident open/resolve/re-trigger
++ hazard-type labeling, concurrent ack race (exactly-once via DB unique
+constraint), restart recovery (rebuilds state from DB, not SAFE), WS
+snapshot/broadcast, 401/403/404/409/422 auth/RBAC/validation paths, Bonus 2
+trend/slope math, Bonus 4 NL-report parsing (fallback keyword parser,
+LLM-path validation gate, priority-queue advisory boost and its decay/cap),
+Bonus 3 prediction (sigmoid math, artifact honesty, and a source-scan test
+that fails if prediction is ever imported near actuation), and Bonus 1
+camera cross-check (freshness, PIR agreement/disagreement, priority-queue
+rescue, risk-formula isolation). Every automated pass has also been
+re-verified live: a real uvicorn process + real WebSocket client (no
+TestClient), and the dashboard driven end-to-end in an actual browser.
 
 ## Simulator / scenario driver
 
@@ -86,6 +91,15 @@ python sim/driver.py --phantom 30             # TC11a load test (30 concurrent f
 python sim/driver.py --base-url http://127.0.0.1:8001   # target a different server
 
 python sim/seed.py --readings 10000 --incidents 300      # TC19 perf seed
+
+# Bonus 1 camera node (frame-difference occupancy, cross-checked vs PIR):
+python sim/camera_node.py --zone "IoT Lab" --webcam      # needs opencv-python
+python sim/camera_node.py --zone "IoT Lab" --video footage.mp4
+python sim/camera_node.py --zone "IoT Lab" --synthetic   # no OpenCV needed
+
+# Bonus 3 model retrain (ml/model.json ships in the repo; backend serves it
+# in pure Python - sklearn is only needed to re-train):
+python ml/train.py
 ```
 
 Every scenario prints narration cues (`[tc1a] ...`) intended to be read aloud

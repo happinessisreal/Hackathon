@@ -78,6 +78,26 @@ class DriverContext:
         await asyncio.sleep(0.1)
 
 
+async def settle_node(node: ZoneNode, seconds: float = 6.5) -> None:
+    """Flush leftover in-memory tracker state from earlier scenarios in the
+    same server lifetime before asserting a cold SAFE baseline. A finale
+    (tc22/tc23) can leave a zone's FireTracker latched with no reading
+    since - the next fire=0 reading then correctly starts the 5s decay, and
+    a stale PIR hold takes 1.5s to release, so an (a)-case that asserts
+    SAFE immediately would fail for reasons that are correct sensor
+    semantics, not bugs. 6.5s of neutral readings covers decay + hold.
+    (CLAUDE.md rule: every scenario idempotent/re-runnable in any order.)
+    """
+    node.fire = 0
+    node.gas_norm = 0.0
+    node.water_norm = 0.0
+    node.occupancy = 0
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        await node.send_reading()
+        await asyncio.sleep(0.76)
+
+
 # ---------------------------------------------------------------- tc1 flame
 
 
@@ -86,6 +106,7 @@ async def tc1_flame(ctx: DriverContext) -> bool:
     ok = True
     node = ctx.node("IoT Lab")
     await ctx.reset("IoT Lab")
+    await settle_node(node)
 
     narrate("tc1a", "No flame -> zone stays SAFE")
     for _ in range(3):
@@ -136,6 +157,7 @@ async def tc2_gas(ctx: DriverContext) -> bool:
     ok = True
     node = ctx.node("IoT Lab")
     await ctx.reset("IoT Lab")
+    await settle_node(node)  # flush any prior-scenario tracker state first
     node.reboot()
 
     narrate("tc2d", "Boot warm-up: high gas within first 30s of boot must be IGNORED")
@@ -171,6 +193,7 @@ async def tc3_water(ctx: DriverContext) -> bool:
     ok = True
     node = ctx.node("Server Room")
     await ctx.reset("Server Room")
+    await settle_node(node)
 
     narrate("tc3a", "Dry: water=0")
     node.water_norm = 0.0
@@ -202,6 +225,7 @@ async def tc4_pir(ctx: DriverContext) -> bool:
     ok = True
     node = ctx.node("Data Science Lab")
     await ctx.reset("Data Science Lab")
+    await settle_node(node)
 
     narrate("tc4a", "Empty: occupancy=0")
     node.occupancy = 0
@@ -555,6 +579,64 @@ async def tc22_finale(ctx: DriverContext) -> bool:
 
     await n1.close()
     await n2.close()
+    return ok
+
+
+# ---------------------------------------------------- tc24 combined load
+
+
+async def tc24_combined_load(ctx: DriverContext) -> bool:
+    narrate("tc24", "Combined load: all zones posting live while one cycles SAFE->WARNING->CRITICAL->SAFE rapidly - no crash, no freeze, no wrong data")
+    ok = True
+    for name in ctx.zones:
+        await ctx.reset(name)
+
+    names = list(ctx.zones)
+    background = [ctx.node(n) for n in names[1:]]
+    cycler = names[0]
+
+    async def steady_background(node: ZoneNode) -> None:
+        node.water_norm = 0.4  # steady mid-band activity, nothing dramatic
+        for _ in range(10):
+            await node.send_reading()
+            await asyncio.sleep(0.75)
+
+    async def rapid_cycle() -> None:
+        for i in range(4):
+            await ctx.override(cycler, "WARNING", f"tc24 cycle {i}")
+            await asyncio.sleep(0.2)
+            await ctx.override(cycler, "CRITICAL", f"tc24 cycle {i}")
+            await asyncio.sleep(0.2)
+            await ctx.override(cycler, "SAFE", f"tc24 cycle {i}")
+            await asyncio.sleep(0.2)
+
+    async def probe_responsiveness() -> list[float]:
+        latencies = []
+        for _ in range(8):
+            t0 = time.perf_counter()
+            await ctx.status()
+            latencies.append(time.perf_counter() - t0)
+            await asyncio.sleep(0.6)
+        return latencies
+
+    results = await asyncio.gather(
+        *(steady_background(n) for n in background),
+        rapid_cycle(),
+        probe_responsiveness(),
+    )
+    latencies = results[-1]
+    worst = max(latencies)
+
+    ok &= result("tc24-responsive", worst < 2.0, f"worst /api/zones/status latency={worst*1000:.0f}ms under combined load")
+
+    final = await ctx.status()
+    cycler_view = next(z for z in final["zones"] if z["zone_id"] == ctx.zone(cycler)["id"])
+    ok &= result("tc24-consistent", cycler_view["state"] == "SAFE", f"cycler ended state={cycler_view['state']} (no stuck/wrong state)")
+
+    for name in ctx.zones:
+        await ctx.reset(name)
+    for n in background:
+        await n.close()
     return ok
 
 

@@ -2,11 +2,11 @@
 
 Multi-Hazard Smart Campus Safety & Response Grid. RoboFusion 1.0 Techathon,
 Round 1. Team: `[TEAM_NAME]`. Track B (Wokwi ESP32) primary — see
-[Track declaration](#track-declaration).
+[Track declaration](#17-track-declaration).
 
 This file is the source for the submitted PDF (export via any Markdown→PDF
 tool, e.g. Pandoc or VS Code's "Markdown PDF" extension, after inserting the
-Wokwi screenshots noted in [Circuit Diagrams](#circuit-diagrams-per-zone)).
+Wokwi screenshots noted in [Circuit Diagrams](#13-circuit-diagrams-per-zone)).
 
 ---
 
@@ -164,11 +164,15 @@ Tie-break: earlier CRITICAL entry first.
 Computed only over zones **currently CRITICAL** (`backend/priority.py`).
 Occupancy dominates here rather than in the per-zone score because this is
 exactly the "which fire do we run to first" decision, where life safety
-should outweigh raw hazard magnitude. `unacked_seconds` escalates a
-zone's priority the longer it sits un-acknowledged, capped at +10 so an
-old, low-risk incident can never permanently outrank a fresh, severe one.
-`advisory_boost` (Bonus 4) is the only non-sensor-derived term in the
-system, and it is deliberately confined to *this* formula — see
+should outweigh raw hazard magnitude. The `occupancy_factor` used *here*
+is PIR backed up by the Bonus 1 camera cross-check (`PIR OR fresh camera
+detection` — see [§11](#11-bonus-1--camera-based-occupancy-check)); the
+zone's own risk score stays PIR-only per the locked formula.
+`unacked_seconds` escalates a zone's priority the longer it sits
+un-acknowledged, capped at +10 so an old, low-risk incident can never
+permanently outrank a fresh, severe one. `advisory_boost` (Bonus 4) is the
+only non-sensor-derived term in the system, and it is deliberately
+confined to *this* formula — see
 [§10 NL Incident Reporting](#10-bonus-4--nl-incident-reporting).
 
 The dashboard renders the exact breakdown per zone, e.g.:
@@ -236,6 +240,7 @@ erDiagram
         float peak_risk
         string status "open|acked|resolved"
         datetime resolved_at "nullable"
+        string hazard "fire|gas|water|compound|manual (TC14)"
     }
     ACKNOWLEDGMENTS {
         int id PK
@@ -259,15 +264,21 @@ fast (~14 ms) against 300+ seeded incidents / 10k+ seeded readings via
 (zone_id, ts_server)` — per-zone chronological reads (trend window,
 timeline queries).
 
-**Two additive columns beyond the literal locked schema block** (both
-required by a locked *behavioral* rule that has nowhere else to live —
-logged in full in `ASSUMPTIONS.md`):
+**Three additive columns beyond the literal locked schema block** (each
+required by a scored *behavioral* requirement that has nowhere else to live
+— logged in full in `ASSUMPTIONS.md`):
 
 - `readings.anomaly` — a reading whose `ts_device` is earlier than the
   zone's last-applied reading is stored (audit trail) and flagged, but
   never rewrites current state (TC18c).
 - `zone_transitions.reason` — carries the admin's free-text justification
   required by "manual state set **with reason**" (`POST /api/admin/override`).
+- `incidents.hazard` — TC14 requires the incident log to show and filter by
+  *hazard type*. Set once at incident open from the fusion contributions at
+  that instant: every hazard contributing ≥ 10 points, largest first
+  (`"fire"`, `"fire+water"`, …), or `"manual"` for an admin-override-opened
+  incident, so the log also shows *what kind* of event each incident was,
+  not just that one happened.
 
 **Race safety**: `acknowledgments.incident_id` is `UNIQUE`. Ack is
 implemented as an insert that relies on the DB constraint, not an
@@ -286,7 +297,7 @@ user token (`Authorization: Bearer <token>`, issued by `/api/auth/login`).
 | POST | `/api/ingest` | `X-Zone-Key` | Raw sensor readings in; validated, deduped by `(zone_id, seq)` |
 | GET | `/api/zones/status` | bearer | All zones' current state + priority queue in one call |
 | GET | `/api/zones/{id}/trend` | bearer | Bonus 2 — slope/rising flag for one zone |
-| GET | `/api/incidents?from=&to=&zone=&status=` | bearer | History, filterable |
+| GET | `/api/incidents?from=&to=&zone=&status=&hazard=` | bearer | History, filterable (incl. hazard type, TC14) |
 | GET | `/api/incidents/{id}` | bearer | Full transition timeline for one incident (TC14) |
 | POST | `/api/incidents/{id}/ack` | staff/admin | Exactly-once acknowledgment |
 | POST | `/api/admin/override` | admin only | Manual state set with reason, `cause='manual'` |
@@ -295,6 +306,7 @@ user token (`Authorization: Bearer <token>`, issued by `/api/auth/login`).
 | GET | `/api/commands/{zone_id}` | `X-Zone-Key` | Zone node polls actuation commands |
 | WS | `/ws?token=` | bearer (query param) | Pushes `snapshot` / `state_change` / `incident_ack` / `periodic_snapshot` |
 | POST | `/api/report` | staff/admin | Bonus 4 — NL incident reporting |
+| POST | `/api/camera` | `X-Zone-Key` | Bonus 1 — camera occupancy check-in |
 | GET | `/api/ping` | — | Liveness check |
 
 ### POST `/api/ingest`
@@ -335,7 +347,11 @@ fabricated as SAFE.
       ],
       "last_reading_at": "2026-07-25T09:00:03Z",
       "open_incident_id": 7, "incident_status": "open",
-      "trend": {"scores": [25.0, 25.0, 25.0, 65.0], "slope": 10.0, "rising": false}
+      "trend": {"scores": [25.0, 25.0, 25.0, 65.0], "slope": 10.0, "rising": false},
+      "predicted_risk": {"p_critical": 0.87, "likely": true,
+                          "model": "logistic_regression", "horizon_seconds": 120},
+      "camera": {"occupied": true, "confidence": 0.9, "fresh": true,
+                  "agrees_with_pir": true}
     }
   ],
   "priority_queue": [
@@ -353,16 +369,19 @@ No token → `401` (TC10b).
 { "zone_id": 1, "scores": [10, 15, 22, 30, 41], "slope": 7.8, "rising": true }
 ```
 
-### GET `/api/incidents?zone=2&status=open`
+### GET `/api/incidents?zone=2&status=open&hazard=water`
 ```json
 [
   {
     "id": 7, "zone_id": 2, "zone_name": "Server Room",
     "opened_at": "2026-07-25T09:00:00Z", "peak_risk": 72.5,
-    "status": "open", "resolved_at": null, "ack": null
+    "status": "open", "resolved_at": null,
+    "hazard": "fire+water", "ack": null
   }
 ]
 ```
+`hazard=water` matches both `"water"` and compound labels like
+`"fire+water"`; `hazard=manual` isolates override-opened incidents.
 
 ### GET `/api/incidents/{id}`
 ```json
@@ -453,6 +472,18 @@ delta-application, no stale data (TC23d).
 ```
 See [§10](#10-bonus-4--nl-incident-reporting) for the full safety contract.
 
+### POST `/api/camera` (Bonus 1)
+```json
+// Request  (X-Zone-Key header, camera node may only report its own zone)
+{ "zone_id": 1, "occupied": true, "confidence": 0.9,
+  "ts_device": "2026-07-25T09:00:00Z" }
+// 200 Response
+{ "zone_id": 1, "camera_occupied": true, "pir_occupied": false,
+  "agrees_with_pir": false, "ts": "2026-07-25T09:00:00.4Z" }
+```
+See [§11](#11-bonus-1--camera-based-occupancy-check) for how the
+cross-check feeds the priority ranking (and nothing else).
+
 ## 8. RBAC
 
 Enforced by FastAPI dependencies at the top of every handler
@@ -468,6 +499,17 @@ Demonstrated in the video both ways: the override panel and health tab are
 absent from a staff login (UI), and a staff bearer token against
 `POST /api/admin/override` via `curl` still returns `403` (API-level, not
 just a hidden button) — TC13.
+
+**Accessibility consideration (TC16b) — never color alone.** Every zone
+state is triple-encoded: color, icon, and text label (`✓ SAFE`,
+`▲ WARNING`, `✕ CRITICAL`), so the dashboard remains fully readable for
+color-blind operators. The same principle carries through the rest of the
+UI: OFFLINE is a labeled badge (not a grey tint), new-CRITICAL alerts pair
+the visual toast with a distinct audio cue (a second sensory channel, not
+just more pixels), the priority queue marks its top entry with an explicit
+`#1` rank and a text banner rather than only a pulse animation, and the
+Predicted Risk chip is distinguished from live state by shape and wording
+(dashed border, italic, "advisory" label), not color alone.
 
 ## 9. Bonus 2 — Short-Term Risk Trend
 
@@ -507,18 +549,114 @@ The advisory term decays linearly to 0 over 10 minutes and is capped at
 loud report can't permanently dominate the queue, and stacking many reports
 on one zone doesn't runaway past +10.
 
-**If Bonus 3 (ML prediction) is added later**: it follows the identical
-pattern — a `Predicted Risk` chip, visually and structurally separate from
-the live score, with the same "no write access to actuation" rule enforced
-in code, not just by convention.
+## 11. Bonus 1 — Camera-Based Occupancy Check
 
-## 11. Circuit Diagrams Per Zone
+**Hardware honesty first**: the case specifies an ESP32-CAM, which exists
+only as physical hardware — Wokwi does not simulate camera frames, so on
+Track B there is no camera to wire. We implemented the closest legitimate
+Track-B equivalent: `sim/camera_node.py` runs **real frame-difference
+motion detection** (the exact algorithm the case suggests — consecutive
+grayscale frames differenced, changed-pixel ratio smoothed over 5 frames,
+threshold at 2%) against a **laptop webcam or a video file** via OpenCV,
+standing in for the ESP32-CAM the same way the Wokwi potentiometer stands
+in for a water-level sensor. A `--synthetic` mode (scripted
+occupied/empty pattern, no OpenCV) exists so the *integration* can be
+demonstrated on any machine — the video narration states which source is
+on screen.
+
+**Cross-check semantics** (evaluation: "correctness of the cross-check
+against PIR"): the camera node POSTs `{occupied, confidence}` to
+`/api/camera` (zone-key auth, own-zone only) once a second. The backend
+compares it against the PIR's debounced state and surfaces the verdict on
+the zone card (`CAM occupied/empty`, highlighted when it disagrees with
+PIR) and in every `/api/camera` response (`agrees_with_pir`).
+
+**Priority-ranking integration** (evaluation: "integration into the
+priority ranking"): the case's stated purpose is to "reduce false 'zone is
+empty' readings that would otherwise skew the priority ranking" — so that
+is precisely, and only, where it acts. The ranking's occupancy factor is
+`PIR OR (fresh camera detection)`: a dead or blocked PIR can no longer
+demote an occupied CRITICAL zone below an empty one. When the camera is
+the rescuing source, the justification line says so explicitly —
+`Occupied (camera) +15`. Camera readings go stale after 5 s (a silent
+camera is never trusted), and the zone's **own risk score still uses PIR
+alone** — the locked fusion formula is untouched, enforced by
+`tests/test_camera.py::test_effective_occupied_never_touches_risk_score`.
+
+## 12. Bonus 3 — ML Risk Prediction
+
+**(a) Training data — synthetic, stated plainly.** No real campus data
+exists for this system, so `ml/train.py` generates it: 400 episodes of
+simulated sensor behavior whose feature/label pairs are computed by the
+*real* backend code (`backend.fusion.risk_score`,
+`backend.trend.compute_slope`) — not a reimplementation that could drift.
+One stated modeling assumption matters: with the locked weights, CRITICAL
+(≥ 65) is unreachable without fire (gas 25 + water 25 + occupancy 10 caps
+at 60), so "predict CRITICAL" is really "predict ignition" — and a spark
+from nowhere is unpredictable by definition. The synthetic world therefore
+models the *predictable* ignition path: smoldering (fumes rising for ~2
+minutes before open flame — the case's own soldering-flux and
+battery-off-gassing scenarios), while keeping no-precursor sudden fires in
+the data so the model stays honest about what it cannot foresee.
+
+**(b) Model and why.** Logistic regression (scikit-learn) over 8 features:
+fire level, gas/water levels, occupancy, gas/water/score slopes (least-
+squares over the last 8 samples), and current risk score. Chosen because
+the case calls it "a completely reasonable choice", it is auditable (8
+readable coefficients), and it exports to plain JSON — the backend serves
+`ml/model.json` in pure Python (`sigmoid(w·x + b)`, `backend/prediction.py`)
+with no sklearn, numpy, or pickle at runtime.
+
+**(c) Validation — actually reported.** Held-out test set (25%, stratified;
+alert threshold chosen on a separate validation split, F1-maximal):
+
+| Metric | Value |
+|---|---|
+| Accuracy | 0.837 |
+| Precision | 0.449 |
+| Recall | 0.863 |
+| Decision threshold | 0.498 |
+| Base positive rate | 0.137 |
+
+These are honest numbers, not tuned-for-show ones: the high-recall /
+moderate-precision operating point is deliberate for an early-warning
+advisory — it catches ~86% of real onsets 1–2 minutes ahead, at the cost
+of also flagging some rising-but-self-resolving ramps. The same metrics
+ship inside `ml/model.json`, so the documented numbers and the deployed
+artifact cannot drift apart.
+
+**(d) Dashboard presentation.** A `Predicted Risk N% (ML, advisory)` chip
+on the zone card — dashed border, italic, violet, deliberately unlike any
+live-state styling — shown only when a model artifact is present, the zone
+has ≥ 8 readings of history, and the zone is **not** already CRITICAL (a
+live alarm supersedes any forecast). It is a separate field
+(`predicted_risk`) in the API payload, never blended into `risk_score`.
+
+**(e) Safety statement — enforced, not promised.** The predicted value
+never triggers the relay, buzzer, a state change, or an incident. This is
+structural: `backend/prediction.py` is imported by the display-payload
+builder (`status_service.py`) only; there is no import path from it into
+`pipeline.py`, `state_machine.py`, `fusion.py`, or `routers/commands.py`.
+`tests/test_prediction.py::test_no_actuation_module_imports_prediction`
+scans those sources and fails the build if anyone ever wires prediction
+toward actuation.
+
+## 13. Circuit Diagrams Per Zone
 
 `firmware/zone_node.ino` is one sketch; only the `PER-ZONE CONFIG` block
 changes per zone (`ZONE_NAME`, `ZONE_ID`, `ZONE_API_KEY`, `ZONE_HAS_GAS`).
-`firmware/diagram.json` wires IoT Lab (all 4 sensors); Server Room / Data
-Science Lab use the same diagram minus the `gas1` part and its 3
-connections (`ZONE_HAS_GAS = false`).
+Each implemented zone has its own committed wiring file (TC26):
+
+| Zone | Diagram file | Sensors wired |
+|---|---|---|
+| IoT Lab | `firmware/diagram.json` | fire + gas + water + PIR (all actuators) |
+| Server Room | `firmware/diagram_server_room.json` | fire + water + PIR (all actuators) |
+| Data Science Lab | `firmware/diagram_data_science_lab.json` | fire + water + PIR (all actuators) |
+
+The two no-gas variants are the IoT Lab diagram minus the `gas1` part and
+its 3 connections (generated programmatically, not hand-edited — the shared
+wiring is byte-identical). In each zone's Wokwi project, rename that zone's
+file to `diagram.json` and set `ZONE_HAS_GAS` accordingly.
 
 **> Insert Wokwi screenshots here before exporting the final PDF** — one
 per zone, taken from the actual simulator after the human smoke-test
@@ -543,7 +681,7 @@ GPIO 0/2/5/12/15 (ESP32 strapping pins) are deliberately unused by any
 output — see `firmware/README.md` for the reasoning (Wokwi won't flag a
 strapping-pin misuse; real hardware will refuse to boot correctly).
 
-## 12. Backup & Recovery
+## 14. Backup & Recovery
 
 ```bash
 scripts/backup.sh   # sqlite3 .backup — online, WAL-safe, no downtime
@@ -558,7 +696,7 @@ likely casualty, while `incidents`/`acknowledgments` (the rows that
 actually matter for audit/compliance) are written synchronously well
 before a typical backup cadence (e.g. hourly cron) would run.
 
-## 13. Retention & Access Policy
+## 15. Retention & Access Policy
 
 Raw `readings` older than 90 days are intended to be summarized (e.g.
 hourly min/max/avg per zone) and dropped — the fusion formula only ever
@@ -573,7 +711,7 @@ model in §8 — `staff` can see current zone state and incident timelines,
 but bulk raw-sensor export is an admin-only capability, matching who's
 authorized to run `/api/admin/health` and overrides).
 
-## 14. Scaling Note (TC11)
+## 16. Scaling Note (TC11)
 
 Today: one uvicorn process, one SQLite file (WAL mode), in-process
 `asyncio.Lock` per zone for write serialization, in-process pub/sub for WS
@@ -604,7 +742,7 @@ isolated in this codebase:
   contained change, not a rewrite of the pipeline or the dashboard
   contract.
 
-## 15. Track Declaration
+## 17. Track Declaration
 
 **Track B (Wokwi ESP32) is primary.** All three zones' circuits are
 defined in `firmware/diagram.json` / `firmware/zone_node.ino` and are
@@ -616,15 +754,18 @@ a substitute for the Wokwi hardware demo. See `firmware/README.md` for the
 current validation status and the Wokwi project link(s) (added to
 `README.md` once smoke-tested).
 
-## 16. Testing Summary
+## 18. Testing Summary
 
-71 pytest cases (`pytest -q`) covering fusion math, flame debounce/decay,
+98 pytest cases (`pytest -q`) covering fusion math, flame debounce/decay,
 PIR hold, CRITICAL hysteresis, duplicate-seq dedup, out-of-order/anomaly
-flagging, incident open/resolve/re-trigger, concurrent ack race,
-restart recovery, WS snapshot/broadcast, 401/403/404/409/422 paths, Bonus 2
-trend math, and Bonus 4 parsing/validation/advisory-boost decay+cap. Every
+flagging, incident open/resolve/re-trigger + hazard labeling, concurrent
+ack race, restart recovery, WS snapshot/broadcast, 401/403/404/409/422
+paths, Bonus 2 trend math, Bonus 4 parsing/validation/advisory-boost
+decay+cap, Bonus 3 prediction math + artifact honesty + the
+no-actuation-import source guard, and Bonus 1 camera cross-check
+(freshness, PIR agreement, priority rescue, formula isolation). Every
 pytest-covered behavior has also been re-verified live: a real uvicorn
 process with a real WebSocket client (not `TestClient`), and the dashboard
 driven end-to-end in an actual browser. `sim/driver.py` (all scenario
-groups tc1–tc23) is green end-to-end against a live server. See `README.md`
+groups tc1–tc24) is green end-to-end against a live server. See `README.md`
 for exact commands.

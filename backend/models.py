@@ -115,6 +115,11 @@ class Incident(Base):
     peak_risk: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="open")  # open | acked | resolved
     resolved_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    # Additive column beyond the literal locked schema block: TC14 requires the
+    # incident log to be filterable by *hazard type*, which is derived state
+    # (dominant contribution(s) at open time, or 'manual' for an admin
+    # override) with nowhere else to live. E.g. "fire", "fire+water".
+    hazard: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (Index("idx_incidents_status_created", "status", "opened_at"),)
 

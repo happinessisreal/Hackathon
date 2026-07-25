@@ -69,6 +69,16 @@
           </select>
         </label>
         <label>
+          Hazard
+          <select id="filter-hazard">
+            <option value="">All</option>
+            <option value="fire">Fire</option>
+            <option value="gas">Gas</option>
+            <option value="water">Water</option>
+            <option value="manual">Manual override</option>
+          </select>
+        </label>
+        <label>
           From
           <input type="datetime-local" id="filter-from" />
         </label>
@@ -83,9 +93,11 @@
           <thead>
             <tr>
               <th>Zone</th>
+              <th>Hazard</th>
               <th>Status</th>
               <th>Peak risk</th>
               <th>Opened</th>
+              <th>Duration</th>
               <th>Resolved</th>
             </tr>
           </thead>

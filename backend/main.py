@@ -6,10 +6,10 @@ from fastapi.staticfiles import StaticFiles
 
 from backend import broadcaster
 from backend.config import BASE_DIR
-from backend.database import async_session_maker, engine
+from backend.database import async_session_maker, engine, ensure_additive_columns
 from backend.models import Base
 from backend.pipeline import manager
-from backend.routers import admin, auth, commands, incidents, ingest, report, ws, zones
+from backend.routers import admin, auth, camera, commands, incidents, ingest, report, ws, zones
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("scsrg")
@@ -21,6 +21,7 @@ async def lifespan(app: FastAPI):
     # traffic. Never assume SAFE for a zone that already had an incident open.
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await ensure_additive_columns()
 
     async with async_session_maker() as db:
         await manager.restore_from_db(db)
@@ -41,6 +42,7 @@ app.include_router(zones.router)
 app.include_router(incidents.router)
 app.include_router(admin.router)
 app.include_router(commands.router)
+app.include_router(camera.router)
 app.include_router(report.router)
 app.include_router(ws.router)
 

@@ -28,6 +28,7 @@ async def _to_incident_out(db: AsyncSession, incident: Incident) -> IncidentOut:
         peak_risk=incident.peak_risk,
         status=incident.status,
         resolved_at=incident.resolved_at,
+        hazard=incident.hazard,
         ack=AcknowledgmentOut.model_validate(ack) if ack else None,
     )
 
@@ -38,6 +39,7 @@ async def list_incidents(
     to: dt.datetime | None = Query(default=None),
     zone: int | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
+    hazard: str | None = Query(default=None),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -50,6 +52,9 @@ async def list_incidents(
         stmt = stmt.where(Incident.zone_id == zone)
     if status_filter is not None:
         stmt = stmt.where(Incident.status == status_filter)
+    if hazard is not None:
+        # "fire" matches "fire" and compound labels like "fire+water".
+        stmt = stmt.where(Incident.hazard.like(f"%{hazard}%"))
 
     incidents = (await db.execute(stmt)).scalars().all()
     return [await _to_incident_out(db, i) for i in incidents]

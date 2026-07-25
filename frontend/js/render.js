@@ -105,7 +105,36 @@ export function renderZoneGrid(container, zones, { role, onAck, onOpenTimeline }
         sensor.status === "offline" ? `${label} OFFLINE` : `${label} ${formatSensorValue(sensor.type, sensor.value)}`;
       sensorRow.appendChild(chip);
     }
+    // Bonus 1: camera cross-check chip (only when a camera node reports).
+    if (zone.camera) {
+      const cam = document.createElement("span");
+      cam.className = "sensor-chip cam-chip";
+      if (!zone.camera.fresh) {
+        cam.dataset.status = "offline";
+        cam.textContent = "CAM STALE";
+      } else {
+        cam.dataset.status = "online";
+        cam.textContent = `CAM ${zone.camera.occupied ? "occupied" : "empty"}`;
+        if (zone.camera.agrees_with_pir === false) {
+          cam.classList.add("cam-disagree");
+          cam.title = "Camera disagrees with PIR - priority ranking uses the camera as backup";
+        }
+      }
+      sensorRow.appendChild(cam);
+    }
     card.appendChild(sensorRow);
+
+    // Bonus 3: Predicted Risk - a visually separate, ML-derived advisory
+    // chip. Hidden on CRITICAL zones (the live alarm supersedes any
+    // forecast) and never styled like the live score.
+    if (zone.predicted_risk && zone.state !== "CRITICAL" && !zone.offline) {
+      const pred = document.createElement("div");
+      pred.className = "predicted-risk";
+      if (zone.predicted_risk.likely) pred.dataset.likely = "true";
+      pred.textContent = `Predicted Risk ${Math.round(zone.predicted_risk.p_critical * 100)}% (ML, advisory)`;
+      pred.title = "P(CRITICAL within 120s), logistic regression - display only, never triggers actuation";
+      card.appendChild(pred);
+    }
 
     const meta = document.createElement("div");
     meta.className = "hint-text";
@@ -178,6 +207,13 @@ export function renderPriorityPanel(sectionEl, listEl, bannerEl, priorityQueue) 
   });
 }
 
+function formatDuration(openedIso, resolvedIso) {
+  const end = resolvedIso ? new Date(resolvedIso).getTime() : Date.now();
+  const seconds = Math.max(0, (end - new Date(openedIso).getTime()) / 1000);
+  const label = seconds < 60 ? `${seconds.toFixed(0)}s` : seconds < 3600 ? `${(seconds / 60).toFixed(1)}m` : `${(seconds / 3600).toFixed(1)}h`;
+  return resolvedIso ? label : `${label} (ongoing)`;
+}
+
 export function renderIncidentTable(tbody, incidents, onRowClick) {
   tbody.innerHTML = "";
   for (const incident of incidents) {
@@ -187,6 +223,10 @@ export function renderIncidentTable(tbody, incidents, onRowClick) {
     const zoneTd = document.createElement("td");
     zoneTd.textContent = incident.zone_name;
     tr.appendChild(zoneTd);
+
+    const hazardTd = document.createElement("td");
+    hazardTd.textContent = incident.hazard || "--";
+    tr.appendChild(hazardTd);
 
     const statusTd = document.createElement("td");
     const pill = document.createElement("span");
@@ -203,6 +243,10 @@ export function renderIncidentTable(tbody, incidents, onRowClick) {
     const openedTd = document.createElement("td");
     openedTd.textContent = new Date(incident.opened_at).toLocaleString();
     tr.appendChild(openedTd);
+
+    const durationTd = document.createElement("td");
+    durationTd.textContent = formatDuration(incident.opened_at, incident.resolved_at);
+    tr.appendChild(durationTd);
 
     const resolvedTd = document.createElement("td");
     resolvedTd.textContent = incident.resolved_at ? new Date(incident.resolved_at).toLocaleString() : "--";

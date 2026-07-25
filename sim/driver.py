@@ -37,6 +37,7 @@ from sim.scenarios import (  # noqa: E402
     tc18_concurrent_writes,
     tc22_finale,
     tc23_edge_cases,
+    tc24_combined_load,
 )
 
 SCENARIOS = {
@@ -50,6 +51,7 @@ SCENARIOS = {
     "tc18": tc18_concurrent_writes,
     "tc22": tc22_finale,
     "tc23": tc23_edge_cases,
+    "tc24": tc24_combined_load,
 }
 
 

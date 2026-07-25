@@ -31,10 +31,15 @@ task — check items off as they're actually completed, don't pre-check.
       open risk to the video — do this before the Wokwi-dependent parts of
       `VIDEO_SCRIPT.md` are recorded. See `firmware/README.md` "Validation
       status."
-- [x] Phase 5 — Bonus 2 (risk trend UI) and Bonus 4 (NL incident reporting,
-      DeepSeek-backed with an offline fallback) done. Bonus 3 (ML
-      prediction) deliberately deferred — see `ASSUMPTIONS.md` Phase 5.
-- [ ] If time remains after the video/docs are locked: Bonus 3.
+- [x] Phase 5 — **all four bonuses attempted**: Bonus 1 (camera occupancy
+      cross-check — frame-difference detection standing in for the
+      ESP32-CAM on Track B, honestly documented), Bonus 2 (risk trend UI),
+      Bonus 3 (ML prediction — synthetic-data logistic regression, metrics
+      reported, no-actuation guard tested), Bonus 4 (NL incident
+      reporting, DeepSeek-backed with an offline fallback).
+- [x] Case-PDF audit pass: TC14 hazard-type + duration columns/filter,
+      TC16b accessibility statement, TC24 driver scenario, TC26 per-zone
+      diagram files, TC9b firmware offline buffer — all closed.
 
 ## Documentation
 
@@ -64,6 +69,11 @@ task — check items off as they're actually completed, don't pre-check.
       falls back to the offline parser on any failure, so this must be
       confirmed off-camera or the on-camera narration should say "offline
       parser" instead of "LLM."
+- [ ] Before recording (Bonus 1): start the camera node
+      (`python sim/camera_node.py --zone "IoT Lab" --webcam`, needs
+      `pip install opencv-python`; `--synthetic` works with no extra
+      install but the narration must then say "scripted pattern"). Confirm
+      the CAM chip renders on the zone card.
 - [ ] Video is ≤ 7:00.
 - [ ] Uploaded to Google Drive with **general viewer access** (test the
       link in a private/incognito window, logged out).

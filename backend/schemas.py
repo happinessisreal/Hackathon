@@ -74,6 +74,7 @@ class IncidentOut(BaseModel):
     peak_risk: float
     status: str
     resolved_at: dt.datetime | None
+    hazard: str | None = None  # e.g. "fire", "fire+water", "manual" (TC14)
     ack: AcknowledgmentOut | None = None
 
 

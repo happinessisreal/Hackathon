@@ -34,3 +34,21 @@ def _set_sqlite_pragmas(dbapi_connection, connection_record):
 async def get_db():
     async with async_session_maker() as session:
         yield session
+
+
+async def ensure_additive_columns() -> None:
+    """Tiny forward-only migration for columns added after a DB may already
+    exist (SQLite's create_all only creates missing *tables*, it never
+    alters existing ones). Safe to run every startup - each ALTER is
+    guarded by a PRAGMA existence check.
+    """
+    additive = [
+        ("incidents", "hazard", "VARCHAR"),
+    ]
+    from sqlalchemy import text
+
+    async with engine.begin() as conn:
+        for table, column, ddl_type in additive:
+            cols = (await conn.execute(text(f"PRAGMA table_info({table})"))).fetchall()
+            if cols and column not in {c[1] for c in cols}:
+                await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}"))
