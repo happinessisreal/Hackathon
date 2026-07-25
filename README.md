@@ -10,9 +10,9 @@ concurrent races) - not as a substitute for the Wokwi hardware demo.
 
 - **Phase 0** (scaffold, schema, seed): done.
 - **Phase 1** (ingestion, fusion, state machine, incidents, ack, auth/RBAC, tests): done.
-- **Phase 2** (WS + dashboard), **Phase 3** (sim/driver scenarios), **Phase 4**
-  (firmware), **Phase 5** (bonuses 2-4), **Phase 6** (docs/video/submission):
-  not yet started.
+- **Phase 2** (WS broadcast + full dashboard): done.
+- **Phase 3** (sim/driver scenarios), **Phase 4** (firmware), **Phase 5**
+  (bonuses 2-4), **Phase 6** (docs/video/submission): not yet started.
 
 See `ASSUMPTIONS.md` for defaults chosen without pausing for confirmation.
 
@@ -35,8 +35,9 @@ uvicorn backend.main:app --reload --port 8000
 the demo login credentials (`staff1`/`staff123`, `admin1`/`admin123`). It's
 idempotent - re-run any time without duplicating rows.
 
-Open http://localhost:8000/api/ping to confirm the backend is up. The
-dashboard (`frontend/`) is served from the same origin once Phase 2 lands.
+Open http://localhost:8000/ for the dashboard (login with the credentials
+printed above) or http://localhost:8000/api/ping to confirm just the backend
+is up.
 
 ## Tests
 
@@ -44,11 +45,15 @@ dashboard (`frontend/`) is served from the same origin once Phase 2 lands.
 pytest -q
 ```
 
-40 tests covering: fusion formula math, flame debounce/decay, PIR hold,
+45 tests covering: fusion formula math, flame debounce/decay, PIR hold,
 CRITICAL hysteresis (entry/exit/min-hold/flip-flood suppression), duplicate
 seq dedup, out-of-order/anomaly flagging, incident open/resolve/re-trigger,
-concurrent ack race (exactly-once via DB unique constraint), and
-401/403/404/409/422 auth/RBAC/validation paths.
+concurrent ack race (exactly-once via DB unique constraint), restart
+recovery (rebuilds state from DB, not SAFE), WS snapshot/broadcast, and
+401/403/404/409/422 auth/RBAC/validation paths. Every automated pass has
+also been re-verified live: a real uvicorn process + real WebSocket client
+(no TestClient), and the dashboard driven end-to-end in an actual browser
+(login, override, live push, ack, resolve, timeline modal, RBAC hiding).
 
 ## API
 

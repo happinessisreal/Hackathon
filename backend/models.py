@@ -8,6 +8,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    TypeDecorator,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -19,13 +20,40 @@ def utcnow() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
 
+class UTCDateTime(TypeDecorator):
+    """SQLite's DateTime storage silently drops tzinfo on read, which then
+    raises "can't subtract offset-naive and offset-aware datetimes" the
+    moment a DB-loaded timestamp (e.g. after restart recovery, or an
+    incident's opened_at in the priority calc) is compared against a
+    freshly created UTC-aware `now`. Normalizing at the ORM boundary - UTC
+    in, UTC-aware out - fixes it once instead of at every call site.
+    """
+
+    impl = DateTime
+    cache_ok = True
+
+    def process_bind_param(self, value: dt.datetime | None, dialect) -> dt.datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=dt.timezone.utc)
+        return value.astimezone(dt.timezone.utc)
+
+    def process_result_value(self, value: dt.datetime | None, dialect) -> dt.datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=dt.timezone.utc)
+        return value.astimezone(dt.timezone.utc)
+
+
 class Zone(Base):
     __tablename__ = "zones"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     api_key: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[dt.datetime] = mapped_column(UTCDateTime, default=utcnow)
 
     sensors: Mapped[list["Sensor"]] = relationship(back_populates="zone")
 
@@ -55,8 +83,8 @@ class Reading(Base):
     gas_norm: Mapped[float | None] = mapped_column(Float, nullable=True)
     water_norm: Mapped[float | None] = mapped_column(Float, nullable=True)
     occupancy: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    ts_device: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    ts_server: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    ts_device: Mapped[dt.datetime] = mapped_column(UTCDateTime, nullable=False)
+    ts_server: Mapped[dt.datetime] = mapped_column(UTCDateTime, default=utcnow)
     # Additive column beyond the literal locked schema block: flags readings whose
     # ts_device arrived out of order relative to the zone's last applied reading (TC18c).
     # Such readings are stored for audit but never rewrite current zone state.
@@ -72,7 +100,7 @@ class ZoneTransition(Base):
     to_state: Mapped[str] = mapped_column(String, nullable=False)
     risk_score: Mapped[float] = mapped_column(Float, nullable=False)
     cause: Mapped[str] = mapped_column(String, nullable=False)  # 'sensor' | 'manual'
-    ts: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    ts: Mapped[dt.datetime] = mapped_column(UTCDateTime, default=utcnow)
     # Additive column beyond the literal locked schema block: required to
     # satisfy "manual state set with reason" (POST /api/admin/override).
     reason: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -83,10 +111,10 @@ class Incident(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     zone_id: Mapped[int] = mapped_column(ForeignKey("zones.id", ondelete="RESTRICT"), nullable=False)
-    opened_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    opened_at: Mapped[dt.datetime] = mapped_column(UTCDateTime, default=utcnow)
     peak_risk: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="open")  # open | acked | resolved
-    resolved_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
     __table_args__ = (Index("idx_incidents_status_created", "status", "opened_at"),)
 
@@ -99,7 +127,7 @@ class Acknowledgment(Base):
         ForeignKey("incidents.id", ondelete="RESTRICT"), unique=True, nullable=False
     )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
-    ts: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    ts: Mapped[dt.datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class User(Base):

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.ack_service import AlreadyAcknowledged, IncidentNotFound
 from backend.ack_service import ack_incident as ack_incident_core
 from backend.database import get_db
+from backend.events import bus
 from backend.models import Acknowledgment, Incident, User, Zone, ZoneTransition
 from backend.schemas import AckResponse, AcknowledgmentOut, IncidentOut, IncidentTimelineOut, ZoneTransitionOut
 from backend.security import get_current_user, require_staff_or_admin
@@ -97,5 +98,7 @@ async def ack_incident(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
     except AlreadyAcknowledged:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Incident already acknowledged")
+
+    await bus.publish({"type": "incident_ack", "incident_id": incident_id})
 
     return AckResponse(**result)

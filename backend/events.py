@@ -4,7 +4,10 @@ connection manager subscribes here; until it does, publishing is a no-op.
 """
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
+
+logger = logging.getLogger("scsrg")
 
 Listener = Callable[[dict], Awaitable[None]]
 
@@ -23,7 +26,12 @@ class EventBus:
     async def publish(self, event: dict) -> None:
         if not self._listeners:
             return
-        await asyncio.gather(*(listener(event) for listener in self._listeners), return_exceptions=True)
+        results = await asyncio.gather(
+            *(listener(event) for listener in self._listeners), return_exceptions=True
+        )
+        for result in results:
+            if isinstance(result, Exception):
+                logger.exception("event bus listener failed for %s", event, exc_info=result)
 
 
 bus = EventBus()

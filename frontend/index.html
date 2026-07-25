@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SCS-RG — Smart Campus Safety &amp; Response Grid</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="toast-container" aria-live="polite"></div>
+
+  <section id="login-view">
+    <form id="login-form" class="login-card">
+      <h1>SCS-RG</h1>
+      <p class="login-sub">Multi-Hazard Smart Campus Safety &amp; Response Grid</p>
+      <label>
+        Username
+        <input type="text" id="login-username" autocomplete="username" required />
+      </label>
+      <label>
+        Password
+        <input type="password" id="login-password" autocomplete="current-password" required />
+      </label>
+      <button type="submit">Sign in</button>
+      <p id="login-error" class="error-text" hidden></p>
+    </form>
+  </section>
+
+  <section id="dashboard-view" hidden>
+    <header id="top-bar">
+      <div class="brand">
+        <span class="brand-mark">SCS-RG</span>
+        <span id="conn-badge" class="conn-badge" data-connected="false">OFFLINE</span>
+      </div>
+      <div class="who">
+        <span id="who-user"></span>
+        <button id="logout-btn" class="ghost-btn">Log out</button>
+      </div>
+    </header>
+
+    <div id="urgent-banner" class="urgent-banner" hidden></div>
+
+    <main id="main-grid">
+      <section id="zone-section">
+        <h2>Zones</h2>
+        <div id="zone-grid" class="zone-grid"></div>
+      </section>
+
+      <aside id="priority-section" hidden>
+        <h2>Priority Queue</h2>
+        <ol id="priority-list" class="priority-list"></ol>
+      </aside>
+    </main>
+
+    <section id="incident-section">
+      <h2>Incident Timeline</h2>
+      <form id="incident-filters" class="incident-filters">
+        <label>
+          Zone
+          <select id="filter-zone"><option value="">All</option></select>
+        </label>
+        <label>
+          Status
+          <select id="filter-status">
+            <option value="">All</option>
+            <option value="open">Open</option>
+            <option value="acked">Acked</option>
+            <option value="resolved">Resolved</option>
+          </select>
+        </label>
+        <label>
+          From
+          <input type="datetime-local" id="filter-from" />
+        </label>
+        <label>
+          To
+          <input type="datetime-local" id="filter-to" />
+        </label>
+        <button type="submit">Filter</button>
+      </form>
+      <div class="table-wrap">
+        <table id="incident-table">
+          <thead>
+            <tr>
+              <th>Zone</th>
+              <th>Status</th>
+              <th>Peak risk</th>
+              <th>Opened</th>
+              <th>Resolved</th>
+            </tr>
+          </thead>
+          <tbody id="incident-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="admin-section" hidden>
+      <h2>Admin</h2>
+      <div class="admin-grid">
+        <form id="override-form" class="override-form">
+          <h3>Manual Override</h3>
+          <label>
+            Zone
+            <select id="override-zone"></select>
+          </label>
+          <label>
+            Target state
+            <select id="override-target">
+              <option value="SAFE">SAFE</option>
+              <option value="WARNING">WARNING</option>
+              <option value="CRITICAL">CRITICAL</option>
+            </select>
+          </label>
+          <label>
+            Reason
+            <input type="text" id="override-reason" placeholder="e.g. fire drill" required />
+          </label>
+          <button type="submit">Apply override</button>
+          <p id="override-result" class="hint-text"></p>
+        </form>
+
+        <div id="health-panel" class="health-panel">
+          <h3>System Health</h3>
+          <dl id="health-list"></dl>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <div id="incident-modal" class="modal" hidden>
+    <div class="modal-card">
+      <button id="incident-modal-close" class="ghost-btn modal-close">Close</button>
+      <div id="incident-modal-body"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

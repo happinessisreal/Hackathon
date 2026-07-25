@@ -4,11 +4,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from backend import broadcaster
 from backend.config import BASE_DIR
 from backend.database import async_session_maker, engine
 from backend.models import Base
 from backend.pipeline import manager
-from backend.routers import admin, auth, commands, incidents, ingest, zones
+from backend.routers import admin, auth, commands, incidents, ingest, ws, zones
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("scsrg")
@@ -24,8 +25,11 @@ async def lifespan(app: FastAPI):
     async with async_session_maker() as db:
         await manager.restore_from_db(db)
 
+    broadcaster.start()
+
     logger.info("SCS-RG backend ready; %d zone(s) restored from DB", len(manager.all_runtimes()))
     yield
+    broadcaster.stop()
     await engine.dispose()
 
 
@@ -37,6 +41,7 @@ app.include_router(zones.router)
 app.include_router(incidents.router)
 app.include_router(admin.router)
 app.include_router(commands.router)
+app.include_router(ws.router)
 
 
 @app.get("/api/ping", tags=["meta"])

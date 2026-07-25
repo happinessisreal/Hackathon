@@ -47,21 +47,6 @@ class IngestResponse(BaseModel):
     risk_score: float
 
 
-class SensorStatusOut(BaseModel):
-    type: str
-    status: str
-
-
-class ZoneStatusOut(BaseModel):
-    zone_id: int
-    name: str
-    state: str
-    risk_score: float
-    offline: bool
-    sensors: list[SensorStatusOut]
-    last_reading_at: dt.datetime | None
-
-
 class ZoneTransitionOut(BaseModel):
     id: int
     from_state: str
@@ -134,16 +119,6 @@ class CommandOut(BaseModel):
     led: str  # green | yellow | red
     ts: dt.datetime
     cause: str
-
-
-class PriorityEntryOut(BaseModel):
-    zone_id: int
-    zone_name: str
-    risk_score: float
-    occupied: bool
-    unacked_seconds: float
-    priority: float
-    justification: str
 
 
 class TrendOut(BaseModel):
