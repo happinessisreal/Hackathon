@@ -11,8 +11,9 @@ concurrent races) - not as a substitute for the Wokwi hardware demo.
 - **Phase 0** (scaffold, schema, seed): done.
 - **Phase 1** (ingestion, fusion, state machine, incidents, ack, auth/RBAC, tests): done.
 - **Phase 2** (WS broadcast + full dashboard): done.
-- **Phase 3** (sim/driver scenarios), **Phase 4** (firmware), **Phase 5**
-  (bonuses 2-4), **Phase 6** (docs/video/submission): not yet started.
+- **Phase 3** (sim/ zone simulators + driver scenarios + resilience): done.
+- **Phase 4** (firmware), **Phase 5** (bonuses 2-4), **Phase 6**
+  (docs/video/submission): not yet started.
 
 See `ASSUMPTIONS.md` for defaults chosen without pausing for confirmation.
 
@@ -54,6 +55,33 @@ recovery (rebuilds state from DB, not SAFE), WS snapshot/broadcast, and
 also been re-verified live: a real uvicorn process + real WebSocket client
 (no TestClient), and the dashboard driven end-to-end in an actual browser
 (login, override, live push, ack, resolve, timeline modal, RBAC hiding).
+
+## Simulator / scenario driver
+
+```bash
+python scripts/init_db.py                    # if not already seeded
+uvicorn backend.main:app --port 8000 &        # backend must be running
+
+python sim/driver.py                          # run every scenario group (tc1-tc7, tc18, tc22, tc23)
+python sim/driver.py tc1 tc22                 # run just these groups
+python sim/driver.py --phantom 30             # TC11a load test (30 concurrent fake zones)
+python sim/driver.py --base-url http://127.0.0.1:8001   # target a different server
+
+python sim/seed.py --readings 10000 --incidents 300      # TC19 perf seed
+```
+
+Every scenario prints narration cues (`[tc1a] ...`) intended to be read aloud
+over the video footage, and a PASS/FAIL line per observable check. All
+scenarios are idempotent/re-runnable - safe to re-run for a retake. Formula
+math, hysteresis, dedup, ack races, and restart recovery are proven in
+`tests/`; the driver proves the same behavior holds over real HTTP against a
+live, running system.
+
+**Don't point the driver at a server/dashboard you're actively watching for
+a demo** - `tc22`/`tc23`/etc. flip real zone states, and `--phantom` creates
+and later deletes zone rows. Run it against a disposable DB/port
+(`DATABASE_URL=... uvicorn ... --port 8801`, `sim/driver.py --base-url
+http://127.0.0.1:8801`) unless you're deliberately recording it live.
 
 ## API
 

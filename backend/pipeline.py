@@ -140,9 +140,18 @@ async def process_reading(
                 "risk_score": runtime.current_risk_score,
             }
 
-        if runtime.boot_ts is None:
-            uptime_seconds = (payload.uptime_ms / 1000.0) if payload.uptime_ms is not None else 0.0
-            runtime.boot_ts = now - dt.timedelta(seconds=uptime_seconds)
+        if payload.uptime_ms is not None:
+            # Recomputed every reading, not just the first: in continuous
+            # operation this stays ~constant (now and uptime_ms advance
+            # together), but a real reboot (uptime_ms resets near 0) makes
+            # the candidate jump forward and correctly re-arms warm-up -
+            # without needing a separate explicit "reboot" signal.
+            runtime.boot_ts = now - dt.timedelta(seconds=payload.uptime_ms / 1000.0)
+        elif runtime.boot_ts is None:
+            # No uptime signal at all: fail-safe assumption of a fresh boot,
+            # applied once so it still naturally elapses after 30s instead
+            # of blocking gas forever.
+            runtime.boot_ts = now
 
         fire_level = runtime.fire.update(payload.fire, now)
         gas_value = runtime.gas_value(payload.gas_norm, now)
