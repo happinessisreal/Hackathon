@@ -1,46 +1,42 @@
-"""Every script-demonstrable test case, in ascending order, in one take.
+"""The 12 test cases a script can legitimately demonstrate, in one take.
 
-Each case prints a banner with its explicit TC id before it runs and a
-PASS/FAIL line with its TC id after, so the terminal itself is the on-screen
-test-case labelling TC31 asks for.
+Named for its honest coverage: 12 numbered test cases — TC6, TC7, TC8, TC9,
+TC10, TC11, TC13, TC18, TC19, TC22, TC23, TC24. Each prints its explicit
+[tcNN] id before running and on every PASS/FAIL line, so the terminal itself
+is the on-screen test-case labelling TC31 requires.
 
-WHAT THIS COVERS (script-demonstrable)
-    tc1   flame: none / flicker / sustained / decay
-    tc2   gas: warm-up / baseline / ramp
-    tc3   water: dry / rising / cross / cleared
-    tc4   pir: empty / enter / flicker / disconnected -> OFFLINE
-    tc5   actuation: critical / warning-only / reset / two zones at once
-    tc6   malformed 422 / dual-hazard / duplicate seq / concurrent zones
-    tc7   3 zones critical / double-ack race / flip-flood / re-trigger
-    tc8   every documented endpoint answers as documented        [added here]
-    tc9b  offline caching + resync under original seq numbers    [added here]
-    tc10  unregistered zone key / missing + bad token -> 401     [added here]
-    tc11a 30 phantom zones under concurrent load
-    tc13  RBAC enforced server-side: staff token -> 403          [added here]
-    tc18a 10 simultaneous writes to one zone
-    tc18b zone delete with dependent rows blocked by the FK      [added here]
-    tc18c out-of-order ts_device stored + flagged, never applied [added here]
-    tc19  indexed query stays fast at volume, index confirmed    [added here]
-    tc22  finale: continuous two-zone incident end to end
-    tc23  edge cases: offline mid-incident / triple critical /
-          override collision / reconnect catch-up / impossible value
-    tc24  combined load with consistency + responsiveness checks
-    tc9a  restart recovery - guided pause, needs a manual restart
+DEFAULT RUN (12 cases)
+    tc6   ingestion+fusion: malformed 422 / dual-hazard / duplicate seq / concurrent
+    tc7   alert+conflict: 3 zones critical / double-ack race / flip-flood / re-trigger
+    tc8   API design: every documented endpoint answers as documented
+    tc9   resilience: offline cache resyncs under ORIGINAL seq (9b) + restart (9a)
+    tc10  security: bad zone key / missing token / bad token -> 401
+    tc11  scalability: 30 phantom zones under concurrent load
+    tc13  RBAC enforced server-side (the curl half; UI block must also be filmed)
+    tc18  concurrency+integrity: 10 writes / FK blocks delete / out-of-order flagged
+    tc19  query performance: indexed plan printed, timed at volume
+    tc22  end-to-end finale (drives it; the dashboard tells the story)
+    tc23  edge cases: offline mid-incident / triple / collision / catch-up / 422
+    tc24  behaviour under combined load
 
-WHAT THIS CANNOT COVER (must be filmed in the UI or the docs)
-    tc12  priority queue + justification line + MOST URGENT banner
-    tc14  incident timeline drill-down
-    tc15  stacking toasts + audio cue, ack silences it
-    tc16  colour + icon + text label (never colour alone)
-    tc25  dashboard renders backend state, no client-side drift
-    tc26  circuit diagrams per zone
-    tc28/tc30/tc31  documentation and video requirements
+DELIBERATELY EXCLUDED — TC1-TC5, Section A, 40 marks
+    Graded on seeing a sensor act and an actuator respond. No terminal output
+    earns those marks; the Wokwi screen recording does. Note tc5_actuation
+    forces state with admin overrides (cause='manual') and never drives the
+    sensor -> fusion -> CRITICAL -> actuation chain, so it is not even a valid
+    stand-in. Available via `--only tc1` etc. for regression checking.
+
+ALSO NOT COVERABLE — film in the UI or ship in the docs
+    tc12 (12 marks, the largest single case) priority queue + justification +
+    MOST URGENT banner · tc14 timeline drill-down · tc15 toasts + audio ·
+    tc16 colour+icon+text · tc17 schema · tc20 backup · tc21 retention ·
+    tc25 no client drift · tc26-tc31 documentation and video
 
 Usage:
-    python sim/record_all.py                  # everything, incl. tc9a pause
-    python sim/record_all.py --skip-restart   # uninterrupted
-    python sim/record_all.py --only tc1 tc5   # subset, still in TC order
-    python sim/record_all.py --list           # show ids and exit
+    python sim/record_12_testcases.py                  # the 12, incl. tc9a pause
+    python sim/record_12_testcases.py --skip-restart    # uninterrupted
+    python sim/record_12_testcases.py --only tc6 tc10   # subset, in TC order
+    python sim/record_12_testcases.py --list            # show the full split
 """
 
 import argparse
@@ -83,6 +79,14 @@ from sim.scenarios import (  # noqa: E402
 )
 
 BAR = "=" * 68
+
+# The numbered test cases in the default run — this is what the filename means.
+# Sub-case ids below (tc9b, tc11a, tc18a/b/c) roll up into these numbers.
+COVERED = (
+    "TC6", "TC7", "TC8", "TC9", "TC10", "TC11",
+    "TC13", "TC18", "TC19", "TC22", "TC23", "TC24",
+)
+assert len(COVERED) == 12, "filename says 12 - keep COVERED in step with it"
 
 
 def section(tc: str, title: str) -> None:
@@ -245,12 +249,23 @@ async def prep_baseline(ctx: DriverContext) -> None:
     print(f"  baseline: state={v['state']} risk={v['risk_score']:.1f}")
 
 
-PLAN: list[tuple[str, str, object]] = [
+# TC1-TC5 (Section A, 40 marks) are NOT in the default run. They are graded on
+# seeing a sensor act and an actuator respond, which no terminal output can
+# show - the screen recording of Wokwi earns those marks. Worse, tc5_actuation
+# forces state with admin overrides (cause='manual') and never drives the
+# sensor -> fusion -> CRITICAL -> actuation chain, so it is not even a stand-in
+# verification of the real path. Kept available via --only for regression
+# checking, deliberately excluded from the headline count.
+SENSOR_PLAN: list[tuple[str, str, object]] = [
     ("tc1",   "Flame: none / flicker under debounce / sustained / decay on removal", tc1_flame),
     ("tc2",   "Gas: boot warm-up ignored / baseline / gradual ramp",                 tc2_gas),
     ("tc3",   "Water: dry / rising / threshold / cleared",                           tc3_water),
     ("tc4",   "PIR: empty / enter / flicker / disconnected -> OFFLINE",              tc4_pir),
-    ("tc5",   "Actuation: CRITICAL fires / WARNING is LED-only / reset / 2 zones",   tc5_actuation),
+    ("tc5",   "Actuation via override only - NOT the sensor path",                   tc5_actuation),
+]
+
+# The 12 numbered test cases this script legitimately demonstrates.
+PLAN: list[tuple[str, str, object]] = [
     ("tc6",   "Malformed 422 / dual-hazard weighting / duplicate seq / concurrent",  tc6_protocol),
     ("tc7",   "3 zones CRITICAL / double-ack race / flip-flood / re-trigger",        tc7_incidents),
     ("tc8",   "Documented API is the real contract",                                 tc8_api_contract),
@@ -289,11 +304,14 @@ async def main() -> None:
     args = ap.parse_args()
 
     if args.list:
-        print("script-demonstrable:")
+        print(f"DEFAULT RUN — {len(COVERED)} test cases this script demonstrates: {', '.join(COVERED)}")
         for tc, title, _ in PLAN:
             print(f"  {tc:7s} {title}")
         print("  tc9a    restart recovery (guided pause)")
-        print("\nUI / docs only - film these separately:")
+        print("\nNOT in the default run — your SCREEN RECORDING earns these (Section A, 40 marks):")
+        for tc, title, _ in SENSOR_PLAN:
+            print(f"  {tc:7s} {title}   [--only {tc} to verify]")
+        print("\nUI / docs only — film these separately:")
         for tc, title in UI_ONLY:
             print(f"  {tc:11s} {title}")
         return
@@ -302,7 +320,12 @@ async def main() -> None:
     if not zones:
         raise SystemExit("No zones - run scripts/init_db.py first.")
 
-    selected = [p for p in PLAN if args.only is None or p[0] in args.only]
+    # --only may reach into the sensor cases for regression checking; the
+    # default run never includes them.
+    pool = PLAN if args.only is None else PLAN + SENSOR_PLAN
+    order = {tc: i for i, (tc, _, _) in enumerate(SENSOR_PLAN + PLAN)}
+    selected = [p for p in pool if args.only is None or p[0] in args.only]
+    selected.sort(key=lambda p: order.get(p[0], 999))
     results: dict[str, bool | None] = {}
     t_start = time.time()
 
