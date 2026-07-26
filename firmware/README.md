@@ -76,10 +76,21 @@ backend is running locally (the normal dev setup - see the root
 1. **Tunnel** (recommended for the demo video): run `ngrok http 8000` (or
    `cloudflared tunnel --url http://localhost:8000`) alongside the backend,
    and set `BACKEND_HOST`/`BACKEND_PORT`/`BACKEND_USE_TLS` in the sketch to
-   the tunnel's public HTTPS host. This is why `BACKEND_USE_TLS` defaults
-   to `true` and uses `WiFiClientSecure::setInsecure()` (skips CA
-   validation - fine for a demo tunnel with a real cert, not a production
-   choice).
+   the tunnel's public host.
+
+   **The sketch ships with `BACKEND_USE_TLS false` / `BACKEND_PORT 80`.**
+   Measured behaviour against a `cloudflared` quick tunnel: the emulated
+   ESP32's mbedTLS handshake never completes - `HTTPClient` returns `-1`
+   (`HTTPC_ERROR_CONNECTION_REFUSED`) and *nothing* reaches the backend,
+   while the identical request to port 80 on the same tunnel hostname
+   returns 200. The tunnel edge still terminates TLS for the dashboard and
+   every other client; only the simulated node's own leg is plaintext.
+   That's an acceptable trade for a simulator demo and is called out here
+   rather than hidden. The TLS path is still implemented
+   (`WiFiClientSecure::setInsecure()`, which skips CA validation - fine for
+   a demo tunnel with a real cert, not a production choice): set
+   `BACKEND_USE_TLS true` + `BACKEND_PORT 443` on real hardware, where the
+   handshake works normally.
 2. **Deploy the backend** somewhere public for the duration of the demo and
    point `BACKEND_HOST` at it directly.
 
