@@ -658,12 +658,28 @@ its 3 connections (generated programmatically, not hand-edited — the shared
 wiring is byte-identical). In each zone's Wokwi project, rename that zone's
 file to `diagram.json` and set `ZONE_HAS_GAS` accordingly.
 
-**> Insert Wokwi screenshots here before exporting the final PDF** — one
-per zone, taken from the actual simulator after the human smoke-test
-(`firmware/README.md` "Validation status"). Not yet available from this
-build environment (no Wokwi runtime here); the pin table below is complete
-and sufficient to rebuild the circuit without the screenshot, but the
-screenshot is still required by the rubric.
+Captured from the running Wokwi projects (canvas cropped to the circuit; the
+projects themselves are committed under `wokwi/` as importable archives).
+
+**IoT Lab** — the only zone with an MQ-2 gas sensor:
+
+![IoT Lab circuit](firmware/screenshots/iot_lab.png)
+
+**Server Room** — fire + water + PIR, no gas:
+
+![Server Room circuit](firmware/screenshots/server_room.png)
+
+**Data Science Lab** — identical to Server Room:
+
+![Data Science Lab circuit](firmware/screenshots/data_science_lab.png)
+
+Reading the wiring: the ESP32 sits left, sensors centre, actuators right.
+Each LED goes through its own 220 ohm resistor to a dedicated GPIO, so the
+three states are independently driven rather than multiplexed. The relay
+module takes VIN (5 V) rather than 3V3 because its coil driver needs the
+higher rail, while its IN line is 3.3 V logic straight from GPIO 4. The pin
+table below is authoritative and sufficient to rebuild any zone from
+scratch.
 
 | Signal | GPIO | Wokwi part (substitution reason) |
 |---|---|---|

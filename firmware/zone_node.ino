@@ -55,17 +55,17 @@
 #if ZONE_SELECT == 1
   #define ZONE_NAME "IoT Lab"
   #define ZONE_ID 1
-  #define ZONE_API_KEY "zk_R7Kou88PZiNlkjNVbdJQUYagE7CJFJEo"
+  #define ZONE_API_KEY "zk_REPLACE_ME_IOT_LAB"
   #define ZONE_HAS_GAS true       // only zone with an MQ-2
 #elif ZONE_SELECT == 2
   #define ZONE_NAME "Server Room"
   #define ZONE_ID 2
-  #define ZONE_API_KEY "zk_lgi3kTP-SGFVOJ8604W8-zWfLBNWxBW5"
+  #define ZONE_API_KEY "zk_REPLACE_ME_SERVER_ROOM"
   #define ZONE_HAS_GAS false
 #elif ZONE_SELECT == 3
   #define ZONE_NAME "Data Science Lab"
   #define ZONE_ID 3
-  #define ZONE_API_KEY "zk_EU5XNNgUmppachYLp0EmSxOOrl-bDtYH"
+  #define ZONE_API_KEY "zk_REPLACE_ME_DATA_SCIENCE_LAB"
   #define ZONE_HAS_GAS false
 #else
   #error "ZONE_SELECT must be 1 (IoT Lab), 2 (Server Room) or 3 (Data Science Lab)"
@@ -88,7 +88,7 @@
 // the simulated node's leg is plaintext, which is acceptable for a demo and
 // avoids a handshake that the simulator can't reliably drive. Set TLS back
 // to true + port 443 for real hardware.
-#define BACKEND_HOST "beverages-pamela-promise-claire.trycloudflare.com"
+#define BACKEND_HOST "your-tunnel-or-host.example.com"
 #define BACKEND_PORT 80
 #define BACKEND_USE_TLS false
 // ============================================================================

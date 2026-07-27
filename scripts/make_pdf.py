@@ -101,6 +101,16 @@ blockquote {
   break-inside: avoid; page-break-inside: avoid;
 }
 .mermaid svg { max-width: 100% !important; height: auto !important; }
+/* Without an explicit rule an <img> renders at its intrinsic pixel width and
+   silently overflows the printable area - the circuit screenshots are 1600px
+   wide and lost their right-hand third (LEDs, buzzer, relay) off the page
+   edge. max-height keeps a tall capture from monopolising a page. */
+img {
+  max-width: 100%; max-height: 165mm; height: auto; width: auto;
+  display: block; margin: .7em auto;
+  border: 1px solid #c8ccd2; border-radius: 4px;
+  break-inside: avoid; page-break-inside: avoid;
+}
 a { color: #14161a; text-decoration: none; }
 hr { border: 0; border-top: 1px solid #d6dae0; margin: 1.6em 0; }
 """
