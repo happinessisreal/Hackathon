@@ -16,3 +16,11 @@ node_modules/
 # The organizers' case brief - their material, not our deliverable; kept
 # locally for reference but never committed to the public submission repo.
 RoboFusion_1.0_SCS-RG_Round1_Case.pdf
+
+# Video recordings — submitted via Google Drive per the case's submission
+# procedure, never committed. A single take runs to hundreds of MB and this
+# is a public repo.
+Video/
+*.mp4
+*.mkv
+*.mov

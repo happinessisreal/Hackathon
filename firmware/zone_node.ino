@@ -88,7 +88,7 @@
 // the simulated node's leg is plaintext, which is acceptable for a demo and
 // avoids a handshake that the simulator can't reliably drive. Set TLS back
 // to true + port 443 for real hardware.
-#define BACKEND_HOST "instrumentation-lakes-captain-cas.trycloudflare.com"
+#define BACKEND_HOST "beverages-pamela-promise-claire.trycloudflare.com"
 #define BACKEND_PORT 80
 #define BACKEND_USE_TLS false
 // ============================================================================
