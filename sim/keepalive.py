@@ -34,23 +34,44 @@ from sim.node import ZoneNode  # noqa: E402
 INTERVAL = 0.75  # matches POST_INTERVAL_MS in the firmware
 
 
-async def hold(node: ZoneNode, gas: bool) -> None:
-    """Post neutral readings forever. Water/fire/occupancy at rest; gas at a
-    plausible clean-air baseline rather than a flat 0.0, so the card shows a
-    realistic idle reading instead of an implausibly perfect zero."""
-    node.fire = 0
-    node.water_norm = 0.0
-    node.occupancy = 0
-    node.gas_connected = gas
-    if gas:
-        node.gas_norm = 0.04
+async def hold(node: ZoneNode, gas: bool, critical: bool = False) -> None:
+    """Post the same readings forever so a zone sits in a stable, filmable state.
 
+    critical=False: neutral. Gas idles at a plausible clean-air baseline rather
+    than a flat 0.0, so the card reads realistic instead of implausibly perfect.
+
+    critical=True: sustained fire + flood + occupancy, which the backend fuses
+    to 40+25+10 = 75 (plus gas where fitted). Driven through real readings
+    rather than an admin override on purpose - an override pins the state but
+    leaves risk_score at its last sensor value, so the card can end up showing
+    "SAFE" beside a risk of 68, contradicting the documented bands on camera.
+    Sensor-driven CRITICAL keeps state and score coherent, and the transition
+    is logged with cause='sensor'.
+
+    Fire needs 5 consecutive readings to clear debounce (~3.75s at 750ms) and
+    PIR needs 1.5s of hold, so give it ~5s to settle before filming.
+    """
+    node.gas_connected = gas
+    if critical:
+        node.fire = 1
+        node.water_norm = 1.0
+        node.occupancy = 1
+        if gas:
+            node.gas_norm = 0.8
+    else:
+        node.fire = 0
+        node.water_norm = 0.0
+        node.occupancy = 0
+        if gas:
+            node.gas_norm = 0.04
+
+    label = "CRITICAL" if critical else "SAFE"
     sent = 0
     while True:
         await node.send_reading()
         sent += 1
         if sent % 20 == 0:
-            print(f"  [{node.name}] {sent} readings sent, holding SAFE", flush=True)
+            print(f"  [{node.name}] {sent} readings sent, holding {label}", flush=True)
         await asyncio.sleep(INTERVAL)
 
 
@@ -58,6 +79,10 @@ async def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("zones", nargs="*", help="zone names to hold (exact, quoted)")
     ap.add_argument("--all", action="store_true", help="hold every zone in the DB")
+    ap.add_argument(
+        "--critical", nargs="*", default=[], metavar="ZONE",
+        help="hold these zones in a sensor-driven CRITICAL (stages the priority queue for filming)",
+    )
     ap.add_argument("--base-url", default="http://127.0.0.1:8000")
     args = ap.parse_args()
 
@@ -66,10 +91,14 @@ async def main() -> None:
         raise SystemExit("No zones found - run scripts/init_db.py first.")
 
     names = list(available) if args.all else args.zones
+    # A zone named only under --critical should still be held.
+    for extra in args.critical:
+        if extra not in names:
+            names.append(extra)
     if not names:
         raise SystemExit(f"Name at least one zone, or pass --all. Available: {', '.join(available)}")
 
-    unknown = [n for n in names if n not in available]
+    unknown = [n for n in names + args.critical if n not in available]
     if unknown:
         raise SystemExit(f"Unknown zone(s): {unknown}. Available: {', '.join(available)}")
 
@@ -81,9 +110,19 @@ async def main() -> None:
         nodes.append(node)
         # Only IoT Lab has an MQ-2; reporting gas for a zone that has no gas
         # sensor would contradict the seeded sensor rows.
-        tasks.append(asyncio.create_task(hold(node, gas=(name == "IoT Lab"))))
+        tasks.append(
+            asyncio.create_task(
+                hold(node, gas=(name == "IoT Lab"), critical=(name in args.critical))
+            )
+        )
 
-    print(f"holding {len(names)} zone(s) SAFE at {INTERVAL * 1000:.0f}ms: {', '.join(names)}")
+    crit = [n for n in names if n in args.critical]
+    safe = [n for n in names if n not in args.critical]
+    print(f"holding {len(names)} zone(s) at {INTERVAL * 1000:.0f}ms")
+    if safe:
+        print(f"  SAFE     : {', '.join(safe)}")
+    if crit:
+        print(f"  CRITICAL : {', '.join(crit)}  (allow ~5s for debounce + PIR hold)")
     print("Ctrl-C to stop\n")
     try:
         await asyncio.gather(*tasks)
