@@ -1,7 +1,7 @@
 # SCS-RG — Documentation
 
 Multi-Hazard Smart Campus Safety & Response Grid. RoboFusion 1.0 Techathon,
-Round 1. Team: `[TEAM_NAME]`. Track B (Wokwi ESP32) primary — see
+Round 1. Team: `Error404`. Track B (Wokwi ESP32) primary — see
 [Track declaration](#17-track-declaration).
 
 This file is the source for the submitted PDF (export via any Markdown→PDF

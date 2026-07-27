@@ -4,7 +4,7 @@ Defaults chosen without pausing for confirmation (per CLAUDE.md kickoff rule), l
 
 ## Phase 0
 
-- **Team name**: `[TEAM_NAME]` placeholder left in place; must be replaced everywhere before submission (tracked in SUBMISSION.md, added in Phase 6).
+- **Team name**: `Error404`. Substituted throughout on 27 Jul 2026, replacing the `[TEAM_NAME]` placeholder used during development (docs, README, VIDEO_SCRIPT, and the `author` field of all three Wokwi diagrams).
 - **Auth token model**: `users.token` (schema-locked single column) is a random opaque bearer token issued on login (`secrets.token_urlsafe(32)`), not a JWT. Simple, matches the schema exactly, avoids a signing-key dependency. One active session per user - logging in again issues a new token and invalidates the old one implicitly (column overwritten). Acceptable for a hackathon demo; noted as a scaling gap in DOCUMENTATION.md.
 - **Password hashing**: PBKDF2-HMAC-SHA256 via stdlib `hashlib` (`"<salt_hex>$<hash_hex>"`), not bcrypt/argon2, to avoid a compiled-extension dependency that can fail to build on a judge's machine. 260k iterations.
 - **Zone node auth**: `zones.api_key` (schema-locked), sent as `X-Zone-Key` header, checked against a DB lookup per request.

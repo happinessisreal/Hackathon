@@ -1,6 +1,6 @@
 # SCS-RG - Multi-Hazard Smart Campus Safety & Response Grid
 
-RoboFusion 1.0 Techathon, Round 1. Team: `[TEAM_NAME]`.
+RoboFusion 1.0 Techathon, Round 1. Team: `Error404`.
 
 Track B (Wokwi ESP32) primary; `sim/` Python simulators are used for load and
 protocol-level edge-case testing only (duplicate seq, malformed payloads,

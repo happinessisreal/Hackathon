@@ -90,7 +90,7 @@ task — check items off as they're actually completed, don't pre-check.
 
 ## File naming (confirm with organizers before finalizing)
 
-- [ ] `RoboFusion_[SegmentName]_[TEAM_NAME]_R1` — confirm the exact
+- [ ] `RoboFusion_[SegmentName]_Error404_R1` — confirm the exact
       `SegmentName` convention with Mumith Chowdhury
       (mumith0001@std.uftb.ac.bd) or Ahmed Shahariar Udoy
       (shahariar0001@std.uftb.ac.bd) before naming the final PDF/video
@@ -98,7 +98,7 @@ task — check items off as they're actually completed, don't pre-check.
 
 ## Final housekeeping
 
-- [ ] Replace every remaining `[TEAM_NAME]` placeholder (search the whole
+- [x] Team name `Error404` substituted throughout (search the whole
       repo — `README.md`, `DOCUMENTATION.md`, `VIDEO_SCRIPT.md`, this file,
       and any on-screen text/slides in the video) with the actual team
       name.

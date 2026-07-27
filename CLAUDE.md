@@ -4,7 +4,7 @@
 
 Build the complete SCS-RG system for the RoboFusion 1.0 Techathon Round 1. Rubric = 200 marks (160 core + 40 bonus). **Hard deadline: 27 July 2026, 12:00 AM BST.** Every decision optimizes marks-per-hour. The 7-minute video demo is the real deliverable — every feature must be *demonstrable on screen with narration*. If a feature works but can't be shown convincingly in the video, it earns zero.
 
-Team name placeholder: `[TEAM_NAME]` — replace everywhere before submission.
+Team name: `Error404`.
 
 ## Non-negotiable architecture rules (rubric traps — violating any of these loses marks across multiple test cases)
 
@@ -205,7 +205,7 @@ Narration rule: say what the judge is seeing *and which test case it satisfies*,
 - [ ] Public GitHub repo: firmware/ (Wokwi), backend/, frontend/, sim/, schema + migrations, README. **No pushes after submitting.**
 - [ ] Documentation PDF exported from DOCUMENTATION.md — everything in Section 11 of the case.
 - [ ] Video ≤ 7:00, Google Drive, general viewer access.
-- [ ] File naming: `RoboFusion_[SegmentName]_[TEAM_NAME]_R1` (confirm SegmentName convention with organizers: Mumith Chowdhury mumith0001@std.uftb.ac.bd / Ahmed Shahariar Udoy shahariar0001@std.uftb.ac.bd).
+- [ ] File naming: `RoboFusion_[SegmentName]_Error404_R1` (confirm SegmentName convention with organizers: Mumith Chowdhury mumith0001@std.uftb.ac.bd / Ahmed Shahariar Udoy shahariar0001@std.uftb.ac.bd).
 - [ ] Formula weights in docs match the code exactly (TC30 checks consistency).
 - [ ] Wokwi project link(s) included in README.
 

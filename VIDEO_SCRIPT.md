@@ -53,7 +53,7 @@ and which test case it satisfies**, as it happens, per CLAUDE.md.
 boards visible in a second window/PiP.
 
 **Say**: "SCS-RG — Multi-Hazard Smart Campus Safety & Response Grid, Team
-`[TEAM_NAME]`. Three zones, live on Wokwi ESP32 nodes, all currently SAFE.
+`Error404`. Three zones, live on Wokwi ESP32 nodes, all currently SAFE.
 Every score you'll see is computed server-side from raw sensor values —
 the nodes never send a state, only numbers."
 
@@ -177,6 +177,6 @@ Terminal + dashboard side by side.
 
 **Show**: dashboard back at idle, all zones SAFE.
 
-**Say**: "SCS-RG, Team `[TEAM_NAME]` — Track B, all four bonuses,
+**Say**: "SCS-RG, Team `Error404` — Track B, all four bonuses,
 backend-only scoring, one source of truth, every actuation traceable to a
 real sensor reading. Thank you."
